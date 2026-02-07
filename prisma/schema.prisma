@@ -1,0 +1,355 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int              @id @default(autoincrement())
+  name            String
+  surname         String
+  email           String           @unique
+  password        String?
+  createdAt       DateTime?        @default(now())
+  updatedAt       DateTime?        @updatedAt
+  roleId          Int
+  admin           Admin?
+  client          Client?
+  notifications   Notification[]
+  Service         Service[]
+  serviceProvider ServiceProvider?
+  role            Role             @relation(fields: [roleId], references: [id])
+
+  registrationType AccountType
+  socialUserId     String      @unique
+
+  points          UserPoints?
+  transactions    PointTransaction[]
+
+  // LeaseSpaces: 2FA and app role
+  twofa_secret    String?
+  twofa_enabled   Boolean         @default(false)
+  appRole         UserRole?       // tenant | landlord | admin
+
+  // LeaseSpaces relations
+  properties      Property[]
+  applications    Application[]
+}
+
+enum UserRole {
+  tenant
+  landlord
+  admin
+}
+
+enum AccountType {
+  EMAIL
+  GOOGLE
+  FACEBOOK
+  APPLE
+}
+
+model Role {
+  id          Int     @id @default(autoincrement())
+  description String?
+  users       User[]
+}
+
+model Client {
+  id       Int     @id @default(autoincrement())
+  userId   Int     @unique
+  jwtToken String?
+  user     User    @relation(fields: [userId], references: [id])
+}
+
+model Admin {
+  id      Int     @id @default(autoincrement())
+  userId  Int     @unique
+  authKey String?
+  user    User    @relation(fields: [userId], references: [id])
+}
+
+model ServiceProvider {
+  id        Int        @id @default(autoincrement())
+  userId    Int        @unique
+  points    Int?
+  jwtToken  String?
+  locations Location[]
+  user      User       @relation(fields: [userId], references: [id])
+}
+
+model Service {
+  id          Int       @id @default(autoincrement())
+  name        String?
+  description String?
+  createdAt   DateTime? @default(now())
+  locationId  Int?      @unique
+  userId      Int?
+  location    Location? @relation(fields: [locationId], references: [id])
+  user        User?     @relation(fields: [userId], references: [id])
+}
+
+model Location {
+  id                 Int              @id @default(autoincrement())
+  latitude           Float?
+  longitude          Float?
+  addressDescription String?
+  createdAt          DateTime?        @default(now())
+  serviceProviderId  Int?
+  serviceProvider    ServiceProvider? @relation(fields: [serviceProviderId], references: [id])
+  service            Service?
+}
+
+model Notification {
+  id                 Int               @id @default(autoincrement())
+  notificationTypeId Int?
+  type               String?           // LeaseSpaces: application_status, etc.
+  title              String?
+  message            String?
+  createdAt          DateTime?         @default(now())
+  read               Boolean?          @default(false)
+  userId             Int?
+  notificationType   NotificationType? @relation(fields: [notificationTypeId], references: [id])
+  user               User?             @relation(fields: [userId], references: [id])
+}
+
+model NotificationType {
+  id            Int            @id @default(autoincrement())
+  description   String?
+  notifications Notification[]
+}
+
+// LeaseSpaces: Property rental
+model Property {
+  id             String        @id @default(uuid())
+  title          String
+  description    String?
+  price          Int           // in cents or minor unit; docs use 15000 ZAR
+  currency       String        @default("ZAR")
+  propertyType   String        // apartment, house, etc.
+  rentalType     String        // long-term, short-term
+  rentalPeriod   String        @default("monthly")
+  bedrooms       Int
+  bathrooms      Int
+  area           Int?          // sqm
+  location       Json          // { address, city, province, coordinates: { lat, lng } }
+  amenities      String[]      @default([])
+  images         String[]      @default([])
+  landlordId     Int
+  availableDate  DateTime?
+  status         String        @default("available")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  landlord       User          @relation(fields: [landlordId], references: [id])
+  applications  Application[]
+
+  @@index([landlordId])
+  @@index([status])
+  @@index([propertyType])
+  @@index([rentalType])
+}
+
+// LeaseSpaces: Tenant applications for properties
+model Application {
+  id          String          @id @default(uuid())
+  propertyId  String
+  tenantId    Int
+  status      ApplicationStatus @default(pending)
+  moveInDate  DateTime?
+  message     String?
+  documents   Json?            // [{ type, url, uploadedAt }]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  property    Property        @relation(fields: [propertyId], references: [id])
+  tenant      User            @relation(fields: [tenantId], references: [id])
+
+  @@index([propertyId])
+  @@index([tenantId])
+  @@index([status])
+}
+
+enum ApplicationStatus {
+  pending
+  approved
+  rejected
+  withdrawn
+}
+
+model Ticket {
+  id               String    @id @default(uuid())
+  ticketNumber     String    @unique
+  subject          String    @unique
+  description      String
+  customerId       String
+  customerEmail    String
+  customerName     String
+  status           String    @default("Sent")
+  priority         String    @default("Medium")
+  category         String
+  assignedTo       String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  lastActivity     DateTime  @default(now())
+  slaDueDate       DateTime?
+  tags             Json?
+  isEscalated      Boolean   @default(false)
+  escalationReason String?
+  resolution       String?
+  closedAt         DateTime?
+  closedBy         String?
+
+  messages TicketMessages[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([category])
+  @@index([assignedTo])
+  @@index([customerEmail])
+  @@index([createdAt])
+}
+
+model TicketMessages {
+  id          String     @id @default(uuid())
+  ticketId    String
+  authorId    String
+  authorName  String
+  authorType  AuthorType
+  content     String
+  isInternal  Boolean    @default(false)
+  attachments Json?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  Ticket      Ticket     @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
+  @@index([authorType])
+  @@index([createdAt])
+}
+
+enum AuthorType {
+  customer
+  agent
+  system
+}
+
+model TicketStatus {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  color       String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TicketPriority {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  color     String
+  slaHours  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TicketCategories {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SupportAgents {
+  id             String    @id @default(uuid())
+  name           String
+  email          String    @unique
+  role           AgentRole @default(agent)
+  isActive       Boolean   @default(true)
+  currentTickets Int       @default(0)
+  maxTickets     Int       @default(10)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([role])
+  @@index([isActive])
+}
+
+enum AgentRole {
+  agent
+  senior_agent
+  supervisor
+}
+
+model SupportEmailTemplate {
+  id        String   @id @default(uuid())
+  name      String
+  subject   String
+  content   String
+  isActive  Boolean  @default(true)
+  category  String   @default("support")
+  variables String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Settings {
+  id                 String         @id @default(uuid())
+  appName            String
+  logoUrl            String
+  faviconUrl         String
+  googleMapsApiKey   String
+  allowedRegions     Json
+  primaryColor       String
+  secondaryColor     String
+  supportEmail       String
+  supportPhone       String
+  smtpHost           String
+  smtpPort           Int
+  smtpUsername       String
+  smtpPassword       String
+  smtpEncryption     SmtpEncryption
+  smtpFromEmail      String
+  smtpFromName       String
+  smtpIsActive       Boolean        @default(false)
+  termsAndConditions String
+  privacyPolicy      String
+  aboutPage          String
+  disclaimer         String
+  emailFooterText    String
+  emailHeaderText    String
+  websiteUrl         String
+  companyAddress     String
+  companyPhone       String
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+}
+
+enum SmtpEncryption {
+  tls
+  ssl
+  none
+}
+
+model UserPoints {
+  userId     Int      @id
+  total      Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model PointTransaction {
+  id        String   @id @default(uuid())
+  userId    Int
+  score     Int
+  event     String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}
