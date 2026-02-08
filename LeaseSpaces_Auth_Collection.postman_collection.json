@@ -1,0 +1,201 @@
+{
+  "info": {
+    "name": "LeaseSpaces Auth (Admin, Tenant, Landlord)",
+    "description": "Test auth flows for admin, tenant, and customer/landlord. Set baseUrl and (after sync) backendToken in collection or environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "firebaseIdToken", "value": "" },
+    { "key": "backendToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Get Firebase ID token (run from Postman)",
+      "item": [
+        {
+          "name": "A. Sign up (create user) → get idToken",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"tenant@example.com\",\n  \"password\": \"password123\",\n  \"returnSecureToken\": true\n}"
+            },
+            "url": "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=YOUR_FIREBASE_WEB_API_KEY",
+            "description": "Creates a new Firebase user from Postman. Replace YOUR_FIREBASE_WEB_API_KEY in URL (Firebase Console → Project settings → General → Web API Key). Use a new email each time or you'll get EMAIL_EXISTS. Response contains 'idToken' → copy it into collection variable firebaseIdToken."
+          }
+        },
+        {
+          "name": "B. Sign in (existing user) → get idToken",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"tenant@example.com\",\n  \"password\": \"password123\",\n  \"returnSecureToken\": true\n}"
+            },
+            "url": "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=YOUR_FIREBASE_WEB_API_KEY",
+            "description": "Use for users already created (by A or in Firebase Console). Replace YOUR_FIREBASE_WEB_API_KEY. Copy 'idToken' from response into variable firebaseIdToken."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Health - GET /api/auth",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "No auth. Confirms auth API is up."
+          }
+        },
+        {
+          "name": "Sync - POST /api/auth/sync (Firebase token → backend JWT)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{firebaseIdToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/api/auth/sync",
+            "description": "Use Firebase ID token in Authorization. Copy returned 'token' into backendToken. Works for tenant, landlord, and admin (role comes from DB appRole)."
+          }
+        },
+        {
+          "name": "Firebase - POST /api/auth/firebase (body)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idToken\": \"{{firebaseIdToken}}\",\n  \"registrationType\": \"GOOGLE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/firebase",
+            "description": "Same as sync but idToken in body. registrationType: GOOGLE | FACEBOOK | APPLE | EMAIL."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tenant",
+      "item": [
+        {
+          "name": "GET /api/applications (tenant)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/applications",
+            "description": "Requires backend JWT from sync (tenant or any authenticated user)."
+          }
+        },
+        {
+          "name": "POST /api/applications (tenant)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"propertyId\": \"<property-uuid>\",\n  \"moveInDate\": \"2025-02-01\",\n  \"message\": \"Interested in this property\"\n}"
+            },
+            "url": "{{baseUrl}}/api/applications",
+            "description": "Create application. Replace propertyId with a real property ID."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Landlord / Customer",
+      "item": [
+        {
+          "name": "GET /api/properties (public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/properties",
+            "description": "Public. No auth."
+          }
+        },
+        {
+          "name": "POST /api/properties (landlord)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Test Property\",\n  \"description\": \"Description\",\n  \"price\": 15000,\n  \"propertyType\": \"apartment\",\n  \"rentalType\": \"long-term\",\n  \"bedrooms\": 2,\n  \"bathrooms\": 2,\n  \"location\": { \"address\": \"123 Main St\", \"city\": \"Johannesburg\", \"province\": \"Gauteng\" }\n}"
+            },
+            "url": "{{baseUrl}}/api/properties",
+            "description": "Create property. Requires backend JWT (landlord or admin)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin (LeaseSpaces)",
+      "item": [
+        {
+          "name": "GET /api/admin/dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/dashboard",
+            "description": "Requires user with appRole admin. Use token from /api/auth/sync with an admin user."
+          }
+        },
+        {
+          "name": "GET /api/admin/properties/analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/properties/analytics?period=30d",
+            "description": "Query: period=7d|30d|90d|1y"
+          }
+        },
+        {
+          "name": "GET /api/admin/admin-profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/admin-profile"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Legacy Admin (Firestore)",
+      "item": [
+        {
+          "name": "POST /api/admin/admin-login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"your-password\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/admin-login",
+            "description": "Email/password against Firestore 'admins' collection. Returns backend JWT. Use for legacy admin routes only."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -71,7 +71,7 @@ export async function createApplication(data: {
 
 export async function updateApplicationStatus(
   id: string,
-  status: ApplicationStatus.approved | ApplicationStatus.rejected,
+  status: ApplicationStatus,
   message?: string
 ) {
   return prisma.application.update({

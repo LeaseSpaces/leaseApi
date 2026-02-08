@@ -89,8 +89,9 @@ export async function updateApplicationStatus(req: Request, res: Response): Prom
       });
       return;
     }
+    const applicationId = Array.isArray(req.params.applicationId) ? req.params.applicationId[0] : req.params.applicationId;
     const application = await applicationService.updateApplicationStatus(
-      req.params.applicationId,
+      applicationId as string,
       body.status as ApplicationStatus,
       body.message
     );

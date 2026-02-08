@@ -8,7 +8,7 @@ const JWT_SECRET = config.jwtSecret;
  * Use this token in the Authorization header: "Bearer <token>".
  */
 export const generateToken = (userId: string, expiresIn: string = "7d"): string => {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn });
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn } as jwt.SignOptions);
 };
 
 /**
@@ -19,7 +19,7 @@ export const generateTokenWithPayload = (
   payload: { userId: string; [key: string]: unknown },
   expiresIn: string = "7d"
 ): string => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn } as jwt.SignOptions);
 };
 
 export const verifyToken = (token: string): { userId: string } => {

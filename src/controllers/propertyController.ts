@@ -37,7 +37,8 @@ export async function getProperties(req: Request, res: Response): Promise<void> 
 
 export async function getPropertyById(req: Request, res: Response): Promise<void> {
   try {
-    const property = await propertyService.getPropertyById(req.params.propertyId);
+    const propertyId = Array.isArray(req.params.propertyId) ? req.params.propertyId[0] : req.params.propertyId;
+    const property = await propertyService.getPropertyById(propertyId as string);
     if (!property) {
       res.status(404).json({
         success: false,
@@ -111,7 +112,8 @@ export async function updateProperty(req: Request, res: Response): Promise<void>
       });
       return;
     }
-    const property = await propertyService.updateProperty(req.params.propertyId, req.body);
+    const propertyId = Array.isArray(req.params.propertyId) ? req.params.propertyId[0] : req.params.propertyId;
+    const property = await propertyService.updateProperty(propertyId as string, req.body);
     res.status(200).json({ success: true, property });
   } catch (error) {
     res.status(500).json({
@@ -135,7 +137,8 @@ export async function deleteProperty(req: Request, res: Response): Promise<void>
       });
       return;
     }
-    await propertyService.deleteProperty(req.params.propertyId);
+    const propertyId = Array.isArray(req.params.propertyId) ? req.params.propertyId[0] : req.params.propertyId;
+    await propertyService.deleteProperty(propertyId as string);
     res.status(200).json({ success: true, message: "Property deleted successfully" });
   } catch (error) {
     res.status(500).json({
