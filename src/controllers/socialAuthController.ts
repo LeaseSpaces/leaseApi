@@ -14,18 +14,19 @@ const authController = {
     });
   },
 
-  /** POST /api/auth/firebase — verify Firebase ID token from body, sync user to Neon, return backend JWT */
+  /** POST /api/auth/firebase — verify Firebase ID token from body, sync user to Neon, return backend JWT.
+   * Mobile signup: optional appRole ("tenant" | "landlord") for new users. */
   firebaseAuth: async (req: Request, res: Response): Promise<void> => {
     try {
-      const { idToken, registrationType } = req.body;
-      if (!idToken || !registrationType) {
+      const { idToken, registrationType, appRole } = req.body;
+      if (!idToken) {
         res.status(400).json({
           success: false,
-          error: { code: "VALIDATION_ERROR", message: "idToken and registrationType required" },
+          error: { code: "VALIDATION_ERROR", message: "idToken is required" },
         });
         return;
       }
-      const { user, token } = await authService.handleFirebaseAuth(idToken, registrationType);
+      const { user, token } = await authService.handleFirebaseAuth(idToken, registrationType, appRole);
       res.status(200).json({
         success: true,
         user: {

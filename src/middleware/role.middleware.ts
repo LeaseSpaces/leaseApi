@@ -35,6 +35,31 @@ export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction
 };
 
 /**
+ * Restrict access to super admin only (admin + isSuperAdmin === true).
+ * Use after auth middleware + requireAdmin.
+ */
+export const requireSuperAdmin = (req: AuthRequest, res: Response, next: NextFunction): void => {
+  if (!req.user) {
+    res.status(401).json({
+      success: false,
+      error: { code: "AUTHENTICATION_REQUIRED", message: "Authentication required" },
+    });
+    return;
+  }
+  if (req.user.appRole !== "admin" || req.user.isSuperAdmin !== true) {
+    res.status(403).json({
+      success: false,
+      error: {
+        code: "INSUFFICIENT_PERMISSIONS",
+        message: "Super admin access required",
+      },
+    });
+    return;
+  }
+  next();
+};
+
+/**
  * Restrict to specific roles. E.g. requireRole('admin', 'landlord').
  */
 export const requireRole = (...allowedRoles: string[]) => {

@@ -1,16 +1,16 @@
 /* eslint-disable */
 import express from "express";
 import * as applicationController from "../controllers/applicationController";
-import { firebaseAuth } from "../middleware/auth.middleware";
+import { appAuth } from "../middleware/auth.middleware";
 
 const applicationRouter = express.Router();
 
-// All application routes require auth
-applicationRouter.get("/", firebaseAuth({ syncUser: true }), applicationController.getApplications);
-applicationRouter.post("/", firebaseAuth({ syncUser: true }), applicationController.createApplication);
+// All application routes require auth (backend JWT or Firebase ID token — mobile-friendly)
+applicationRouter.get("/", appAuth({ syncUser: true }), applicationController.getApplications);
+applicationRouter.post("/", appAuth({ syncUser: true }), applicationController.createApplication);
 applicationRouter.put(
   "/:applicationId/status",
-  firebaseAuth({ syncUser: true }),
+  appAuth({ syncUser: true }),
   applicationController.updateApplicationStatus
 );
 

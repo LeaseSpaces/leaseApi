@@ -58,7 +58,7 @@ export const updateLocation = async (
   req: AuthenticatedRequest,
   res: Response
 ):Promise<any> =>  {
-  const locationId = req.params["locationId"];
+  const locationId = String(req.params["locationId"] ?? "");
   const updatedData = req.body;
 
   console.log("Body data", updatedData);

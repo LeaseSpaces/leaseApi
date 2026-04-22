@@ -101,7 +101,10 @@ export const updateAd = async (
   res: Response
 ): Promise<any> => {
   try {
-    const adId = req.params["adId"];
+    const adId = String(req.params["adId"] ?? "");
+    if (!adId) {
+      return res.status(400).json({ success: false, message: "Ad ID is required" });
+    }
     const updateData = req.body;
 
     const adRef = doc(db, "ads", adId);
@@ -138,7 +141,10 @@ export const deleteAd = async (
   res: Response
 ): Promise<any> => {
   try {
-    const adId = req.params["adId"];
+    const adId = String(req.params["adId"] ?? "");
+    if (!adId) {
+      return res.status(400).json({ success: false, message: "Ad ID is required" });
+    }
 
     const adRef = doc(db, "ads", adId);
     await deleteDoc(adRef);
@@ -189,7 +195,10 @@ export const getAd = async (
   res: Response
 ): Promise<any> => {
   try {
-    const adId  = req.params["adId"];
+    const adId = String(req.params["adId"] ?? "");
+    if (!adId) {
+      return res.status(400).json({ success: false, message: "Ad ID is required" });
+    }
 
     const adRef = doc(db, "ads", adId);
     const adSnap = await getDoc(adRef);

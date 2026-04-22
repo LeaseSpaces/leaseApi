@@ -17,7 +17,7 @@ export const updateUser = async (
   res: Response
 ): Promise<any> => {
   try {
-    const userId  = req.params["userId"];
+    const userId = String(req.params["userId"] ?? "");
     const updateData = req.body;
 
     if (!userId) {

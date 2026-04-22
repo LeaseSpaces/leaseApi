@@ -97,6 +97,8 @@ export interface CreateTicketRequest {
     priority: string;
     customerEmail: string;
     customerName: string;
+    /** Prisma user id as string when created by a logged-in app user */
+    customerId?: string;
     tags?: string[];
 }
 
@@ -123,6 +125,8 @@ export interface TicketFilters {
     priority?: string[];
     category?: string[];
     assignedTo?: string[];
+    /** Restrict list to this customer email (case-insensitive) */
+    customerEmail?: string;
     search?: string;
     dateRange?: string;
     sortBy?: string;

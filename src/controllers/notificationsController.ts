@@ -61,7 +61,7 @@ export const updateNotification = async (
   res: Response
 ): Promise<any> => {
   try {
-    const notificationId  = req.params["notificationId"];
+    const notificationId = String(req.params["notificationId"] ?? "");
     const updateData = req.body;
 
     if (!notificationId) {
@@ -106,7 +106,7 @@ export const deleteNotification = async (
   res: Response
 ): Promise<any> => {
   try {
-    const notificationId = req.params["notificationId"];
+    const notificationId = String(req.params["notificationId"] ?? "");
 
     if (!notificationId) {
       return res.status(400).json({
@@ -135,7 +135,7 @@ export const getNotifications = async (
   res: Response
 ): Promise<any> => {
   try {
-    const userId  = req.params["userId"];
+    const userId = String(req.params["userId"] ?? "");
 
     if (!userId) {
       return res.status(400).json({
@@ -174,7 +174,7 @@ export const vetServiceProvider = async (
   res: Response
 ): Promise<any> => {
   try {
-    const userId = req.params["userId"];
+    const userId = String(req.params["userId"] ?? "");
     const { email, status, statusDesign, message } = req.body;
 
     if (

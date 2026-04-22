@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native"]
 }
 
 datasource db {
@@ -33,6 +34,7 @@ model User {
   twofa_secret    String?
   twofa_enabled   Boolean         @default(false)
   appRole         UserRole?       // tenant | landlord | admin
+  isSuperAdmin    Boolean         @default(false)
 
   // LeaseSpaces relations
   properties      Property[]
@@ -140,7 +142,12 @@ model Property {
   images         String[]      @default([])
   landlordId     Int
   availableDate  DateTime?
-  status         String        @default("available")
+  // Legacy status field (kept for backward compatibility with older clients).
+  // Prefer using `availabilityStatus` + `moderationStatus`.
+  status             String                   @default("available")
+  availabilityStatus PropertyAvailabilityStatus @default(available)
+  moderationStatus   PropertyModerationStatus   @default(pending_approval)
+  moderationNotes    String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -149,8 +156,23 @@ model Property {
 
   @@index([landlordId])
   @@index([status])
+  @@index([availabilityStatus])
+  @@index([moderationStatus])
   @@index([propertyType])
   @@index([rentalType])
+}
+
+enum PropertyModerationStatus {
+  pending_approval
+  approved
+  declined
+  flagged_for_review
+}
+
+enum PropertyAvailabilityStatus {
+  available
+  unavailable
+  occupied
 }
 
 // LeaseSpaces: Tenant applications for properties

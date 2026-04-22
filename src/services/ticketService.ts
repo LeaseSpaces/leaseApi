@@ -68,6 +68,7 @@ export const getTickets = async (filters: TicketFilters): Promise<PaginatedRespo
         priority,
         category,
         assignedTo,
+        customerEmail,
         search,
         dateRange,
         sortBy = 'createdAt',
@@ -78,6 +79,10 @@ export const getTickets = async (filters: TicketFilters): Promise<PaginatedRespo
 
     // Build where clause
     const where: any = {};
+
+    if (customerEmail) {
+        where.customerEmail = { equals: customerEmail, mode: 'insensitive' };
+    }
 
     if (status && status.length > 0) {
         where.status = { in: status };
@@ -140,9 +145,6 @@ export const getTickets = async (filters: TicketFilters): Promise<PaginatedRespo
         // @ts-ignore
         data: tickets.map(ticket => ({
             ...ticket,
-            customerId: '', // Will be populated when schema is fixed
-            customerEmail: '', // Will be populated when schema is fixed
-            customerName: '', // Will be populated when schema is fixed
             lastActivity: ticket.messages[0]?.createdAt || ticket.updatedAt,
             assignedTo: ticket.assignedTo || undefined
         })),
@@ -174,9 +176,6 @@ export const getTicket = async (id: string | number): Promise<Ticket | null> => 
     // @ts-ignore
     return {
         ...ticket,
-        customerId: '', // Will be populated when schema is fixed
-        customerEmail: '', // Will be populated when schema is fixed
-        customerName: '', // Will be populated when schema is fixed
         // @ts-ignore
         lastActivity: ticket.messages[ticket.messages.length - 1]?.createdAt || ticket.updatedAt
     };
@@ -199,9 +198,9 @@ export const createTicket = async (data: CreateTicketRequest): Promise<Ticket> =
             subject: data.subject,
             description: data.description,
             status: 'Sent',
-            customerId: customerUser?.id.toString() || "",
-            customerEmail: customerUser?.email.toString() || "",
-            customerName: customerUser?.name.toString() || "",
+            customerId: data.customerId ?? customerUser?.id?.toString() ?? '',
+            customerEmail: data.customerEmail,
+            customerName: data.customerName,
             priority: data.priority,
             category: data.category,
             tags: data.tags || [],
@@ -212,9 +211,6 @@ export const createTicket = async (data: CreateTicketRequest): Promise<Ticket> =
     // @ts-ignore
     return {
         ...ticket,
-        customerId: customerUser?.id?.toString() || "",
-        customerEmail: data.customerEmail,
-        customerName: data.customerName,
         lastActivity: ticket.lastActivity || ticket.createdAt
     };
 }
@@ -240,9 +236,6 @@ export const updateTicket = async (id: string, data: UpdateTicketRequest): Promi
     // @ts-ignore
     return {
         ...ticket,
-        customerId: '', // Will be populated when schema is fixed
-        customerEmail: '', // Will be populated when schema is fixed
-        customerName: '', // Will be populated when schema is fixed
         lastActivity: ticket.lastActivity || ticket.updatedAt
     };
 }
@@ -301,7 +294,13 @@ export const getTicketMessages = async (
 }
 
 // Add message to ticket
-export const addMessage = async (ticketId: string, data: AddMessageRequest, authorId: string, authorName: string): Promise<TicketMessage> => {
+export const addMessage = async (
+    ticketId: string,
+    data: AddMessageRequest,
+    authorId: string,
+    authorName: string,
+    authorType: 'customer' | 'agent' | 'system' = 'agent'
+): Promise<TicketMessage> => {
     const message = await prisma.ticketMessages.create({
         data: {
             // @ts-ignore
@@ -309,7 +308,7 @@ export const addMessage = async (ticketId: string, data: AddMessageRequest, auth
             // @ts-ignore
             authorId,
             authorName,
-            authorType: 'agent',
+            authorType,
             content: data.content,
             isInternal: data.isInternal || false,
             attachments: data.attachments || []
@@ -345,9 +344,6 @@ export const escalateTicket = async (id: string, reason: string): Promise<Ticket
     // @ts-ignore
     return {
         ...ticket,
-        customerId: '', // Will be populated when schema is fixed
-        customerEmail: '', // Will be populated when schema is fixed
-        customerName: '', // Will be populated when schema is fixed
         lastActivity: ticket.lastActivity || ticket.updatedAt
     };
 }
@@ -373,9 +369,6 @@ export const closeTicket = async (id: string, resolution: string, closedBy: stri
     // @ts-ignore
     return {
         ...ticket,
-        customerId: '', // Will be populated when schema is fixed
-        customerEmail: '', // Will be populated when schema is fixed
-        customerName: '', // Will be populated when schema is fixed
         lastActivity: ticket.lastActivity || ticket.updatedAt
     };
 }
@@ -399,9 +392,6 @@ export const reopenTicket = async (id: string, reason: string): Promise<Ticket |
     // @ts-ignore
     return {
         ...ticket,
-        customerId: '', // Will be populated when schema is fixed
-        customerEmail: '', // Will be populated when schema is fixed
-        customerName: '', // Will be populated when schema is fixed
         lastActivity: ticket.lastActivity || ticket.updatedAt
     };
 }
@@ -424,29 +414,28 @@ export const getTicketPriorities = async (): Promise<TicketPriority[]> => {
 
 // Get ticket categories
 export const getTicketCategories = async (): Promise<TicketCategory[]> => {
-    // @ts-ignore
-    return await prisma.ticketCategory.findMany({
+    const rows = await prisma.ticketCategories.findMany({
         where: { isActive: true },
         orderBy: { name: 'asc' }
     });
+    return rows as unknown as TicketCategory[];
 }
 
 // Get support agents
 export const getSupportAgents = async (): Promise<SupportAgent[]> => {
-    // @ts-ignore
-    return await prisma.supportAgent.findMany({
+    return (await prisma.supportAgents.findMany({
         where: { isActive: true },
         orderBy: { name: 'asc' }
-    });
+    })) as unknown as SupportAgent[];
 }
 
-// Update agent workload
-export const updateAgentWorkload = async (agentId: number, maxTickets: number): Promise<SupportAgent | null> => {
-    // @ts-ignore
-    return await prisma.supportAgent.update({
+// Update agent workload (SupportAgents.id is UUID string)
+export const updateAgentWorkload = async (agentId: string, maxTickets: number): Promise<SupportAgent | null> => {
+    const updated = await prisma.supportAgents.update({
         where: { id: agentId },
         data: { maxTickets }
     });
+    return updated as unknown as SupportAgent;
 }
 
 // Get ticket statistics

@@ -1,42 +1,42 @@
-import express from "express"
+import express from "express";
 import * as ctrl from "../controllers/ticketController";
+import { appAuth } from "../middleware/auth.middleware";
+import { requireAdmin } from "../middleware/role.middleware";
 
 const ticketRouter = express.Router();
 
-// Support Email Templates Routes
-ticketRouter.get('/email-templates', ctrl.getSupportEmailTemplates);
-ticketRouter.get('/email-templates/:id', ctrl.getSupportEmailTemplate);
-ticketRouter.post('/email-templates', ctrl.createSupportEmailTemplate);
-ticketRouter.put('/email-templates/:id', ctrl.updateSupportEmailTemplate);
-ticketRouter.delete('/email-templates/:id', ctrl.deleteSupportEmailTemplate);
-ticketRouter.post('/email-templates/:id/send', ctrl.sendSupportEmail);
+// Public: dropdowns for support forms
+ticketRouter.get("/statuses", ctrl.getTicketStatuses);
+ticketRouter.get("/priorities", ctrl.getTicketPriorities);
+ticketRouter.get("/categories", ctrl.getTicketCategories);
 
-// Ticket Statistics Routes
-ticketRouter.get('/stats', ctrl.getTicketStatistics);
+// Admin-only — register before /:id so paths like /stats are not captured as ids
+ticketRouter.get("/email-templates", appAuth(), requireAdmin, ctrl.getSupportEmailTemplates);
+ticketRouter.get("/email-templates/:id", appAuth(), requireAdmin, ctrl.getSupportEmailTemplate);
+ticketRouter.post("/email-templates", appAuth(), requireAdmin, ctrl.createSupportEmailTemplate);
+ticketRouter.put("/email-templates/:id", appAuth(), requireAdmin, ctrl.updateSupportEmailTemplate);
+ticketRouter.delete("/email-templates/:id", appAuth(), requireAdmin, ctrl.deleteSupportEmailTemplate);
+ticketRouter.post("/email-templates/:id/send", appAuth(), requireAdmin, ctrl.sendSupportEmail);
 
-// Support Agents Routes
-ticketRouter.get('/agents', ctrl.getSupportAgents);
-ticketRouter.put('/agents/:id/workload', ctrl.updateAgentWorkload);
+ticketRouter.get("/stats", appAuth(), requireAdmin, ctrl.getTicketStatistics);
 
-// Ticket Configuration Routes
-ticketRouter.get('/statuses', ctrl.getTicketStatuses);
-ticketRouter.get('/priorities', ctrl.getTicketPriorities);
-ticketRouter.get('/categories', ctrl.getTicketCategories);
+ticketRouter.get("/agents", appAuth(), requireAdmin, ctrl.getSupportAgents);
+ticketRouter.put("/agents/:id/workload", appAuth(), requireAdmin, ctrl.updateAgentWorkload);
 
-// Ticket Operations Routes
-ticketRouter.post('/:id/escalate', ctrl.escalateTicket);
-ticketRouter.post('/:id/close', ctrl.closeTicket);
-ticketRouter.post('/:id/reopen', ctrl.reopenTicket);
+// Authenticated: list + create (non-admins only see their own tickets)
+ticketRouter.get("/", appAuth(), ctrl.getTickets);
+ticketRouter.post("/", appAuth(), ctrl.createTicket);
 
-// Ticket Messages Routes
-ticketRouter.get('/:id/messages', ctrl.getTicketMessages);
-ticketRouter.post('/:id/messages', ctrl.addMessage);
+// Admin ticket lifecycle (still before bare /:id for consistency)
+ticketRouter.post("/:id/escalate", appAuth(), requireAdmin, ctrl.escalateTicket);
+ticketRouter.post("/:id/close", appAuth(), requireAdmin, ctrl.closeTicket);
+ticketRouter.post("/:id/reopen", appAuth(), requireAdmin, ctrl.reopenTicket);
 
-// Ticket Management Routes
-ticketRouter.get('/', ctrl.getTickets);
-ticketRouter.get('/:id', ctrl.getTicket);
-ticketRouter.post('/', ctrl.createTicket);
-ticketRouter.put('/:id', ctrl.updateTicket);
-ticketRouter.delete('/:id', ctrl.deleteTicket);
+ticketRouter.get("/:id/messages", appAuth(), ctrl.getTicketMessages);
+ticketRouter.post("/:id/messages", appAuth(), ctrl.addMessage);
 
-export { ticketRouter }
+ticketRouter.get("/:id", appAuth(), ctrl.getTicket);
+ticketRouter.put("/:id", appAuth(), requireAdmin, ctrl.updateTicket);
+ticketRouter.delete("/:id", appAuth(), requireAdmin, ctrl.deleteTicket);
+
+export { ticketRouter };

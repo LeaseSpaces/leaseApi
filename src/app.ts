@@ -282,7 +282,12 @@ app.get("/test", (_req, res) => {
 });
 
 // system routes routes
-app.use("/api/", Routes);
+app.use("/api", Routes);
+// Cloud Functions path compatibility:
+// - cloudfunctions.net/<functionName>/api/... may arrive as /api/...
+// - cloudfunctions.net/<functionName>/... may arrive as /...
+// Mounting at root keeps /admin, /auth, /mobile available in function subpath contexts.
+app.use("/", Routes);
 
 
 export { app };

@@ -1,6 +1,6 @@
 /* eslint-disable */
 
-import { UserRole } from "@prisma/client";
+import { AccountType, UserRole } from "@prisma/client";
 import firebase from "../firebase";
 import { Request, Response } from "express";
 import {
@@ -15,12 +15,106 @@ import {
 } from "firebase/firestore";
 import crypto from "crypto";
 import { STATUS } from "../utils/constants";
+import { verifyPassword } from "../utils/password";
 import { TwoFAService } from "../services/twofa";
-import { generateToken } from "../utils/jwt";
+import { generateToken, generateAdminToken, generateTempToken, verifyTempToken, verifyToken } from "../utils/jwt";
 import { firebaseAdmin } from "../config/firebase-admin";
 import { prisma } from "../config/prisma";
+import { AuthRequest } from "../middleware/auth.middleware";
 
 const db = getFirestore(firebase);
+
+function mapFirebaseProviderToAccountType(provider?: string): AccountType {
+  if (provider === "google.com") return "GOOGLE";
+  if (provider === "facebook.com") return "FACEBOOK";
+  if (provider === "apple.com") return "APPLE";
+  if (provider === "password") return "EMAIL";
+  return "GOOGLE";
+}
+
+function validAppRole(v: unknown): UserRole | null {
+  if (v === "tenant" || v === "landlord") return v as UserRole;
+  return null;
+}
+
+/**
+ * Admin login with username (email) and password only. No Google signup.
+ * Admin users are created only via backend/seed; this endpoint only authenticates.
+ * POST /api/admin/login — body: { username, password }.
+ * Returns token, or requires2fa + temporaryToken if 2FA is enabled.
+ */
+export const adminLoginPrisma = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(STATUS.BAD_REQUEST).json({
+        success: false,
+        error: { code: "MISSING_CREDENTIALS", message: "Username and password are required" },
+      });
+    }
+    const user = await prisma.user.findFirst({
+      where: {
+        email: String(username).trim(),
+        appRole: "admin",
+      },
+    });
+    if (!user || !user.password) {
+      return res.status(401).json({
+        success: false,
+        error: { code: "INVALID_CREDENTIALS", message: "Invalid username or password" },
+      });
+    }
+    if (!verifyPassword(password, user.password)) {
+      return res.status(401).json({
+        success: false,
+        error: { code: "INVALID_CREDENTIALS", message: "Invalid username or password" },
+      });
+    }
+
+    if (user.twofa_enabled) {
+      const temporaryToken = generateTempToken(String(user.id));
+      return res.status(200).json({
+        success: true,
+        requires2fa: true,
+        temporaryToken,
+        user: {
+          id: user.id,
+          uid: user.socialUserId,
+          email: user.email,
+          name: user.name,
+          surname: user.surname,
+          role: user.appRole ?? "tenant",
+          twofa_enabled: user.twofa_enabled,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+      });
+    }
+
+    const token = generateAdminToken(String(user.id));
+    return res.status(200).json({
+      success: true,
+      user: {
+        id: user.id,
+        uid: user.socialUserId,
+        email: user.email,
+        name: user.name,
+        surname: user.surname,
+        role: user.appRole ?? "tenant",
+        twofa_enabled: user.twofa_enabled,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+      token,
+    });
+  } catch (error) {
+    console.error("adminLoginPrisma error:", error);
+    return res.status(500).json({
+      success: false,
+      error: { code: "SERVER_ERROR", message: (error as Error).message },
+    });
+  }
+};
 
 export const adminLogin = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -661,6 +755,7 @@ export const loginUser = async (req: Request, res: Response):Promise<any> =>{
 /**
  * Auth Sync (LeaseSpaces): Verify Firebase JWT from Authorization header,
  * check if user exists in Neon (Prisma), create if not, return user + backend JWT.
+ * Mobile signup: optional body { appRole?: "tenant" | "landlord" } for new users.
  */
 export const syncAuth = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -682,9 +777,36 @@ export const syncAuth = async (req: Request, res: Response): Promise<any> => {
     const email = decoded.email ?? "";
     const name = decoded.name ?? "";
 
+    const registrationType = mapFirebaseProviderToAccountType(decoded.firebase?.sign_in_provider);
+    const appRole = validAppRole(req.body?.appRole) ?? UserRole.tenant;
+
+    // Ensure default role exists for first-login environments without seed.
+    const defaultRole = await prisma.role.upsert({
+      where: { id: 1 },
+      create: { id: 1, description: "Default" },
+      update: {},
+    });
+
     let user = await prisma.user.findUnique({
       where: { socialUserId: uid },
     });
+
+    if (!user) {
+      if (email) {
+        const byEmail = await prisma.user.findUnique({ where: { email } });
+        if (byEmail) {
+          user = await prisma.user.update({
+            where: { id: byEmail.id },
+            data: {
+              socialUserId: uid,
+              name: byEmail.name || name || "",
+              registrationType: byEmail.registrationType ?? registrationType,
+              appRole: byEmail.appRole ?? appRole,
+            },
+          });
+        }
+      }
+    }
 
     if (!user) {
       user = await prisma.user.create({
@@ -693,15 +815,38 @@ export const syncAuth = async (req: Request, res: Response): Promise<any> => {
           surname: "",
           email: email || "unknown@leasespaces.local",
           password: null,
-          roleId: 1,
-          registrationType: "GOOGLE",
+          roleId: defaultRole.id,
+          registrationType,
           socialUserId: uid,
-          appRole: UserRole.tenant,
+          appRole,
         },
       });
     }
 
-    const token = generateToken(String(user.id));
+    const isAdmin = user.appRole === "admin";
+
+    // Admin with 2FA: return temporary token; full token after OTP verification
+    if (isAdmin && user.twofa_enabled) {
+      const temporaryToken = generateTempToken(String(user.id));
+      return res.status(200).json({
+        success: true,
+        requires2fa: true,
+        temporaryToken,
+        user: {
+          id: user.id,
+          uid: user.socialUserId,
+          email: user.email,
+          name: user.name,
+          surname: user.surname,
+          role: user.appRole ?? "tenant",
+          twofa_enabled: user.twofa_enabled,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+      });
+    }
+
+    const token = isAdmin ? generateAdminToken(String(user.id)) : generateToken(String(user.id));
 
     return res.status(200).json({
       success: true,
@@ -726,6 +871,187 @@ export const syncAuth = async (req: Request, res: Response): Promise<any> => {
         code: "INVALID_TOKEN",
         message: "Invalid or expired token",
         details: error instanceof Error ? error.message : "Token verification failed",
+      },
+    });
+  }
+};
+
+/** POST /api/auth/2fa/verify-login — body: { temporaryToken, otp }. Returns full admin token. */
+export const verifyLogin2fa = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { temporaryToken, otp } = req.body;
+    if (!temporaryToken || !otp) {
+      return res.status(STATUS.BAD_REQUEST).json({
+        success: false,
+        error: { code: "MISSING_FIELDS", message: "temporaryToken and otp are required" },
+      });
+    }
+    const { userId } = verifyTempToken(temporaryToken);
+    const user = await prisma.user.findUnique({ where: { id: Number(userId) } });
+    if (!user || user.appRole !== "admin") {
+      return res.status(401).json({
+        success: false,
+        error: { code: "UNAUTHORIZED", message: "Invalid or expired temporary token" },
+      });
+    }
+    if (!user.twofa_secret) {
+      return res.status(400).json({
+        success: false,
+        error: { code: "2FA_NOT_ENABLED", message: "2FA is not enabled for this user" },
+      });
+    }
+    const valid = TwoFAService.verifyOtp(otp, user.twofa_secret);
+    if (!valid) {
+      return res.status(401).json({
+        success: false,
+        error: { code: "INVALID_OTP", message: "Invalid or expired OTP" },
+      });
+    }
+    const token = generateAdminToken(String(user.id));
+    return res.status(200).json({
+      success: true,
+      user: {
+        id: user.id,
+        uid: user.socialUserId,
+        email: user.email,
+        name: user.name,
+        surname: user.surname,
+        role: user.appRole ?? "tenant",
+        twofa_enabled: user.twofa_enabled,
+      },
+      token,
+    });
+  } catch (error) {
+    console.error("verifyLogin2fa error:", error);
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: "INVALID_TOKEN",
+        message: "Invalid or expired temporary token",
+        details: error instanceof Error ? error.message : "Verification failed",
+      },
+    });
+  }
+};
+
+/** POST /api/admin/2fa/init — auth + requireAdmin. Returns { secret, qrCodeBase64 } for first-time setup. */
+export const init2faPrisma = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const userId = (req as AuthRequest).user?.id;
+    if (userId == null) {
+      return res.status(401).json({
+        success: false,
+        error: { code: "UNAUTHORIZED", message: "Authentication required" },
+      });
+    }
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.appRole !== "admin") {
+      return res.status(403).json({
+        success: false,
+        error: { code: "FORBIDDEN", message: "Admin only" },
+      });
+    }
+    if (user.twofa_enabled) {
+      return res.status(400).json({
+        success: false,
+        error: { code: "2FA_ALREADY_ENABLED", message: "2FA is already enabled" },
+      });
+    }
+    const { secret, qrCodeBase64 } = await TwoFAService.generateKeyAndQrCode(user.email ?? "");
+    return res.status(200).json({
+      success: true,
+      secret,
+      qrCodeBase64,
+    });
+  } catch (error) {
+    console.error("init2faPrisma error:", error);
+    return res.status(500).json({
+      success: false,
+      error: { code: "SERVER_ERROR", message: (error as Error).message },
+    });
+  }
+};
+
+/** POST /api/admin/2fa/enable — auth + requireAdmin. Body: { secret, otp }. Saves 2FA and enables. */
+export const enable2faPrisma = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const userId = (req as AuthRequest).user?.id;
+    if (userId == null) {
+      return res.status(401).json({
+        success: false,
+        error: { code: "UNAUTHORIZED", message: "Authentication required" },
+      });
+    }
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.appRole !== "admin") {
+      return res.status(403).json({
+        success: false,
+        error: { code: "FORBIDDEN", message: "Admin only" },
+      });
+    }
+    const { secret, otp } = req.body;
+    if (!secret || !otp) {
+      return res.status(STATUS.BAD_REQUEST).json({
+        success: false,
+        error: { code: "MISSING_FIELDS", message: "secret and otp are required" },
+      });
+    }
+    const valid = TwoFAService.verifyOtp(otp, secret);
+    if (!valid) {
+      return res.status(401).json({
+        success: false,
+        error: { code: "INVALID_OTP", message: "Invalid or expired OTP" },
+      });
+    }
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { twofa_secret: secret, twofa_enabled: true },
+    });
+    return res.status(200).json({
+      success: true,
+      message: "2FA enabled successfully",
+    });
+  } catch (error) {
+    console.error("enable2faPrisma error:", error);
+    return res.status(500).json({
+      success: false,
+      error: { code: "SERVER_ERROR", message: (error as Error).message },
+    });
+  }
+};
+
+/** POST /api/auth/refresh — Bearer token. Returns new token (same expiry from now). */
+export const refreshToken = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: { code: "UNAUTHORIZED", message: "Bearer token required" },
+      });
+    }
+    const { userId } = verifyToken(token);
+    const user = await prisma.user.findUnique({ where: { id: Number(userId) } });
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: { code: "UNAUTHORIZED", message: "User not found" },
+      });
+    }
+    const newToken = user.appRole === "admin" ? generateAdminToken(String(user.id)) : generateToken(String(user.id));
+    return res.status(200).json({
+      success: true,
+      token: newToken,
+    });
+  } catch (error) {
+    console.error("refreshToken error:", error);
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: "INVALID_TOKEN",
+        message: "Invalid or expired token",
+        details: error instanceof Error ? error.message : "Refresh failed",
       },
     });
   }

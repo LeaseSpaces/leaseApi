@@ -7,7 +7,7 @@ dotenv.config();
 
 const {
   DATABASE_URL,
-  JWT_SECRETE,
+  JWT_SECRET,
   API_KEY,
   AUTH_DOMAIN,
   PROJECT_ID,
@@ -20,7 +20,7 @@ const {
 
 const config: Config = {
   databaseuRL: DATABASE_URL as string,
-  jwtSecret: JWT_SECRETE as string,
+  jwtSecret: JWT_SECRET as string,
   firebase: {
     apiKey: API_KEY as string,
     authDomain: AUTH_DOMAIN as string,

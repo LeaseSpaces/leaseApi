@@ -20,4 +20,4 @@ export const ROLES = {
   SERVICE_PROVIDER: 3,
 };
 
-export const APP_NAME = "LONGO";
+export const APP_NAME = "LeaseSpaces";
