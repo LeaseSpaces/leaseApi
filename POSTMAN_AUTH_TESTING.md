@@ -25,7 +25,86 @@ Use `{{baseUrl}}` in request URLs.
 
 ---
 
-## 2. Tenant & Landlord (Firebase → Sync → Backend JWT)
+## 2. Manual Email OTP Auth (New)
+
+This is the new flow you requested: user enters email -> receives OTP -> verifies OTP -> gets JWT -> completes onboarding (first-time user).
+
+### Before testing
+
+1. Start API:
+   - `npm run dev`
+2. Confirm SMTP env is set in `.env`:
+   - `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_SENDER`
+   - `SMTP_SERVER`, `SMTP_PORT`
+   - `EMAIL_USE_SSL`, `EMAIL_USE_STARTTLS`
+   - `EMAIL_TIMEOUT`
+3. Import collection: `LeaseSpaces_Auth_Collection.postman_collection.json`
+4. In Postman variables set:
+   - `baseUrl = http://localhost:8080`
+   - `otpEmail = your-test-email@example.com`
+
+### Step A: Request OTP
+
+- **Request**: `POST {{baseUrl}}/api/auth/otp/request`
+- **Body**:
+
+```json
+{
+  "email": "{{otpEmail}}"
+}
+```
+
+**Expected**:
+- `200 OK`
+- response includes `success: true`, `message`, `expiresInSeconds: 300`
+- OTP arrives in mailbox for `otpEmail`
+
+### Step B: Verify OTP and get JWT
+
+- Copy the OTP from the email into Postman variable `otpCode`
+- **Request**: `POST {{baseUrl}}/api/auth/otp/verify`
+- **Body**:
+
+```json
+{
+  "email": "{{otpEmail}}",
+  "otp": "{{otpCode}}"
+}
+```
+
+**Expected**:
+- `200 OK`
+- response includes:
+  - `token` (backend JWT)
+  - `onboardingRequired` (`true`/`false`)
+  - `user`
+
+Set `backendToken` in Postman to the returned `token`.
+
+### Step C: Complete onboarding (only if required)
+
+If Step B returns `onboardingRequired: true`, call:
+
+- **Request**: `POST {{baseUrl}}/api/auth/onboarding`
+- **Headers**: `Authorization: Bearer {{backendToken}}`
+- **Body**:
+
+```json
+{
+  "name": "Test",
+  "surname": "User",
+  "role": "tenant"
+}
+```
+
+**Expected**:
+- `200 OK`
+- `onboardingRequired: false`
+- updated user profile and new token with role
+
+---
+
+## 3. Tenant & Landlord (Firebase → Sync → Backend JWT)
 
 Tenants and landlords use the same flow: get a **Firebase ID token**, then call **POST /api/auth/sync** to get a **backend JWT**. The role is determined by the user’s `appRole` in the database (set on first sync or by you in Prisma).
 
@@ -82,7 +161,7 @@ In Postman, set a variable **`backendToken`** to the `token` from the sync respo
 
 ---
 
-## 3. Admin (LeaseSpaces – Firebase + appRole admin)
+## 4. Admin (LeaseSpaces – Firebase + appRole admin)
 
 Same as tenant/landlord, but the user must have **`appRole: "admin"`** in your Prisma `User` table.
 
@@ -118,7 +197,7 @@ Or use Prisma Studio / a seed script to set `appRole: "admin"` for that user.
 
 ---
 
-## 4. Legacy admin (Firestore admins)
+## 5. Legacy admin (Firestore admins)
 
 Uses **email + password** against the **Firestore `admins`** collection (no Firebase ID token).
 
@@ -142,11 +221,12 @@ Note: LeaseSpaces protected admin routes (**/api/admin/dashboard**, etc.) expect
 
 ---
 
-## 5. Postman collection summary
+## 6. Postman collection summary
 
 Import **`LeaseSpaces_Auth_Collection.postman_collection.json`** (in this repo). It includes:
 
 - **Auth**: Health, Sync, Firebase (body)
+- **Email OTP**: OTP request, OTP verify, onboarding
 - **Tenant**: Applications list/create (use token from sync)
 - **Landlord**: Properties list (use token from sync)
 - **Admin**: Dashboard, analytics (use token from sync for admin user)
@@ -161,10 +241,11 @@ Import **`LeaseSpaces_Auth_Collection.postman_collection.json`** (in this repo).
 
 ---
 
-## 6. Quick checklist
+## 7. Quick checklist
 
 | Role            | How to get token                    | Where to use it                          |
 |-----------------|-------------------------------------|------------------------------------------|
+| Manual OTP user | POST /auth/otp/request -> POST /auth/otp/verify | If onboardingRequired=true, call /auth/onboarding |
 | Tenant          | Firebase sign-in → POST /auth/sync | GET/POST /api/applications, GET /properties |
 | Landlord        | Firebase sign-in → POST /auth/sync | GET/POST /api/properties, GET /applications (own) |
 | Admin           | Firebase sign-in (admin user) → POST /auth/sync | GET /api/admin/dashboard, analytics, admin-profile |
@@ -172,7 +253,7 @@ Import **`LeaseSpaces_Auth_Collection.postman_collection.json`** (in this repo).
 
 ---
 
-## 7. Firebase Web API Key
+## 8. Firebase Web API Key
 
 To get a Firebase ID token in Postman:
 

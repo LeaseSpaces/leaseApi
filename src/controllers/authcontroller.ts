@@ -17,10 +17,18 @@ import crypto from "crypto";
 import { STATUS } from "../utils/constants";
 import { verifyPassword } from "../utils/password";
 import { TwoFAService } from "../services/twofa";
-import { generateToken, generateAdminToken, generateTempToken, verifyTempToken, verifyToken } from "../utils/jwt";
+import { generateToken, generateAdminToken, generateTempToken, verifyTempToken, verifyToken, generateTokenWithPayload } from "../utils/jwt";
 import { firebaseAdmin } from "../config/firebase-admin";
 import { prisma } from "../config/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
+import { sendLeaseSpacesOtpEmail } from "../services/emailDeliveryService";
+import {
+  generateSixDigitOtp,
+  getOtpExpiryDate,
+  hashOtpCode,
+  isOnboardingRequired,
+  normalizeEmail,
+} from "../services/otpAuthService";
 
 const db = getFirestore(firebase);
 
@@ -1053,6 +1061,226 @@ export const refreshToken = async (req: Request, res: Response): Promise<any> =>
         message: "Invalid or expired token",
         details: error instanceof Error ? error.message : "Refresh failed",
       },
+    });
+  }
+};
+
+/**
+ * POST /api/auth/otp/request
+ * body: { email }
+ * Sends a 6-digit OTP by email and stores hashed OTP with 5-minute TTL.
+ */
+export const requestEmailOtp = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const emailInput = req.body?.email;
+    if (!emailInput || typeof emailInput !== "string") {
+      return res.status(STATUS.BAD_REQUEST).json({
+        success: false,
+        error: { code: "MISSING_FIELDS", message: "email is required" },
+      });
+    }
+
+    const email = normalizeEmail(emailInput);
+    const defaultRole = await prisma.role.upsert({
+      where: { id: 1 },
+      create: { id: 1, description: "Default" },
+      update: {},
+    });
+
+    let user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          name: "",
+          surname: "",
+          email,
+          password: null,
+          roleId: defaultRole.id,
+          registrationType: AccountType.EMAIL,
+          socialUserId: `email:${email}`,
+          appRole: null,
+        },
+      });
+    }
+
+    // @ts-ignore prisma client may be stale in editor until prisma generate reruns
+    await prisma.emailOtp.updateMany({
+      where: { email, consumedAt: null, expiresAt: { gt: new Date() } },
+      data: { consumedAt: new Date() },
+    });
+
+    const otp = generateSixDigitOtp();
+    // @ts-ignore prisma client may be stale in editor until prisma generate reruns
+    await prisma.emailOtp.create({
+      data: {
+        email,
+        codeHash: hashOtpCode(email, otp),
+        expiresAt: getOtpExpiryDate(),
+        userId: user.id,
+      },
+    });
+
+    await sendLeaseSpacesOtpEmail({ to: email, otp });
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP sent successfully",
+      expiresInSeconds: 300,
+    });
+  } catch (error) {
+    console.error("requestEmailOtp error:", error);
+    return res.status(500).json({
+      success: false,
+      error: { code: "SERVER_ERROR", message: (error as Error).message },
+    });
+  }
+};
+
+/**
+ * POST /api/auth/otp/verify
+ * body: { email, otp }
+ * Verifies OTP, marks it as consumed, and returns JWT.
+ */
+export const verifyEmailOtp = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const emailInput = req.body?.email;
+    const otp = req.body?.otp;
+
+    if (!emailInput || typeof emailInput !== "string" || !otp || typeof otp !== "string") {
+      return res.status(STATUS.BAD_REQUEST).json({
+        success: false,
+        error: { code: "MISSING_FIELDS", message: "email and otp are required" },
+      });
+    }
+
+    const email = normalizeEmail(emailInput);
+    const otpHash = hashOtpCode(email, otp);
+    const now = new Date();
+
+    // @ts-ignore prisma client may be stale in editor until prisma generate reruns
+    const otpRecord = await prisma.emailOtp.findFirst({
+      where: {
+        email,
+        codeHash: otpHash,
+        consumedAt: null,
+        expiresAt: { gt: now },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!otpRecord) {
+      return res.status(401).json({
+        success: false,
+        error: { code: "INVALID_OTP", message: "Invalid or expired OTP" },
+      });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: { code: "USER_NOT_FOUND", message: "User not found" },
+      });
+    }
+
+    // @ts-ignore prisma client may be stale in editor until prisma generate reruns
+    await prisma.emailOtp.update({
+      where: { id: otpRecord.id },
+      data: { consumedAt: now },
+    });
+
+    const needsOnboarding = isOnboardingRequired(user);
+    const role = user.appRole ?? "onboarding";
+    const token = generateTokenWithPayload({
+      userId: String(user.id),
+      user_id: user.id,
+      role,
+    });
+
+    return res.status(200).json({
+      success: true,
+      token,
+      onboardingRequired: needsOnboarding,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        surname: user.surname,
+        role: user.appRole,
+      },
+    });
+  } catch (error) {
+    console.error("verifyEmailOtp error:", error);
+    return res.status(500).json({
+      success: false,
+      error: { code: "SERVER_ERROR", message: (error as Error).message },
+    });
+  }
+};
+
+/**
+ * POST /api/auth/onboarding
+ * header: Authorization: Bearer <backend_jwt>
+ * body: { name, surname, role }
+ */
+export const completeManualOnboarding = async (req: AuthRequest, res: Response): Promise<any> => {
+  try {
+    const userId = req.user?.id;
+    const { name, surname, role } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: { code: "UNAUTHORIZED", message: "Authentication required" },
+      });
+    }
+
+    const trimmedName = typeof name === "string" ? name.trim() : "";
+    const trimmedSurname = typeof surname === "string" ? surname.trim() : "";
+    const appRole = validAppRole(role);
+
+    if (!trimmedName || !trimmedSurname || !appRole) {
+      return res.status(STATUS.BAD_REQUEST).json({
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "name, surname and role (tenant|landlord) are required",
+        },
+      });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: trimmedName,
+        surname: trimmedSurname,
+        appRole,
+      },
+    });
+
+    const token = generateTokenWithPayload({
+      userId: String(updated.id),
+      user_id: updated.id,
+      role: updated.appRole ?? "tenant",
+    });
+
+    return res.status(200).json({
+      success: true,
+      token,
+      onboardingRequired: false,
+      user: {
+        id: updated.id,
+        email: updated.email,
+        name: updated.name,
+        surname: updated.surname,
+        role: updated.appRole,
+      },
+    });
+  } catch (error) {
+    console.error("completeManualOnboarding error:", error);
+    return res.status(500).json({
+      success: false,
+      error: { code: "SERVER_ERROR", message: (error as Error).message },
     });
   }
 };

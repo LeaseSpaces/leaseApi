@@ -1,6 +1,14 @@
 import { Router } from "express";
 import ctrl from "../controllers/socialAuthController";
-import { syncAuth, verifyLogin2fa, refreshToken } from "../controllers/authcontroller";
+import {
+  syncAuth,
+  verifyLogin2fa,
+  refreshToken,
+  requestEmailOtp,
+  verifyEmailOtp,
+  completeManualOnboarding,
+} from "../controllers/authcontroller";
+import { backendAuth } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -18,5 +26,14 @@ router.post("/2fa/verify-login", verifyLogin2fa);
 
 // POST /api/auth/refresh — header: Authorization: Bearer <backend_jwt>. Returns new token (same expiry from now).
 router.post("/refresh", refreshToken);
+
+// POST /api/auth/otp/request — body: { email }. Sends 6-digit OTP (5-minute TTL).
+router.post("/otp/request", requestEmailOtp);
+
+// POST /api/auth/otp/verify — body: { email, otp }. Verifies OTP and returns JWT.
+router.post("/otp/verify", verifyEmailOtp);
+
+// POST /api/auth/onboarding — body: { name, surname, role }. Completes first-time onboarding.
+router.post("/onboarding", backendAuth, completeManualOnboarding);
 
 export { router as authRouter };

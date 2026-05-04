@@ -7,7 +7,9 @@
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080" },
     { "key": "firebaseIdToken", "value": "" },
-    { "key": "backendToken", "value": "" }
+    { "key": "backendToken", "value": "" },
+    { "key": "otpEmail", "value": "tenant@example.com" },
+    { "key": "otpCode", "value": "" }
   ],
   "item": [
     {
@@ -63,6 +65,48 @@
             ],
             "url": "{{baseUrl}}/api/auth/sync",
             "description": "Use Firebase ID token in Authorization. Copy returned 'token' into backendToken. Works for tenant, landlord, and admin (role comes from DB appRole)."
+          }
+        },
+        {
+          "name": "OTP Request - POST /api/auth/otp/request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{otpEmail}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/otp/request",
+            "description": "Requests a 6-digit OTP for the email. OTP is valid for 5 minutes and delivered through configured SMTP."
+          }
+        },
+        {
+          "name": "OTP Verify - POST /api/auth/otp/verify",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{otpEmail}}\",\n  \"otp\": \"{{otpCode}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/otp/verify",
+            "description": "Verifies OTP and returns backend JWT with role and onboardingRequired flag. Copy token to backendToken."
+          }
+        },
+        {
+          "name": "Manual Onboarding - POST /api/auth/onboarding",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test\",\n  \"surname\": \"User\",\n  \"role\": \"tenant\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/onboarding",
+            "description": "Complete first-time onboarding when otp verify returns onboardingRequired: true."
           }
         },
         {

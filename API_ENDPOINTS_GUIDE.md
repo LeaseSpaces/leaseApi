@@ -3,7 +3,7 @@
 Use this guide to connect the **main app** (tenant/landlord) and the **admin dashboard** to their dedicated API endpoints.
 
 **Base URL (local):** `http://localhost:8080` by default, or set env **`PORT`** (e.g. `8081`).  
-**Base URL (production):** Use your deployed host + **`/api`** as the API root.
+**Base URL (production):** `https://api-jfh4l76lzq-bq.a.run.app/api`
 
 - **Firebase Functions (recommended stable URL):** use the **Cloud Run** URL printed after `firebase deploy --only functions` (format `https://<id>.<region>.run.app/api`).
 - **`cloudfunctions.net`:** `https://africa-south1-easespaces-7d30b.cloudfunctions.net/api` — call paths like **`/api/auth`**, **`/api/admin/properties`**, etc. (Do **not** double the host in the client; set `VITE_API_URL` to the base that already ends with `/api` or to the origin only, never `cloudfunctions.net` + full URL again.)
@@ -23,10 +23,15 @@ Use these endpoints in the **main LeaseSpaces app** (browse properties, apply, m
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | GET | `/api/auth` | None | Health check; list of auth endpoints |
+| POST | `/api/auth/otp/request` | None | Manual auth: send OTP to email. Body: `{ "email": "user@example.com" }`. |
+| POST | `/api/auth/otp/verify` | None | Manual auth: verify OTP + get backend JWT. Body: `{ "email": "user@example.com", "otp": "123456" }`. |
+| POST | `/api/auth/onboarding` | Backend JWT | First-time profile setup. Body: `{ "name", "surname", "role": "tenant" \| "landlord" }`. |
 | POST | `/api/auth/sync` | Firebase ID token in header | **Main login flow.** Send `Authorization: Bearer <firebase_id_token>`. Returns `{ success, user, token }`. Use `token` as backend JWT for all other requests. |
 | POST | `/api/auth/firebase` | None | Same as sync; send `{ "idToken": "<firebase_id_token>", "registrationType": "GOOGLE" \| "EMAIL" \| "FACEBOOK" \| "APPLE" }` in body. Returns `{ success, user, token }`. |
 
-**App flow:** Sign in with Firebase (e.g. Google/Email) → get Firebase ID token → **POST /api/auth/sync** with that token in header → store returned `token` (backend JWT) → use it in `Authorization: Bearer <token>` for all protected app requests.
+**App flow (Firebase):** Sign in with Firebase (e.g. Google/Email) → get Firebase ID token → **POST /api/auth/sync** with that token in header → store returned `token` (backend JWT) → use it in `Authorization: Bearer <token>` for all protected app requests.
+
+**App flow (Manual OTP):** **POST /api/auth/otp/request** → user enters OTP from email → **POST /api/auth/otp/verify** → if `onboardingRequired: true` call **POST /api/auth/onboarding**.
 
 **Google / mobile:** Prefer **POST /api/auth/sync** or **POST /api/auth/firebase** with `registrationType: "GOOGLE"`; optional `appRole` for new users. Backend links existing users by **email** to the Firebase UID when needed.
 

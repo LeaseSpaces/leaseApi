@@ -1,6 +1,8 @@
 # Mobile App Auth Guide (Tenant & Landlord Signup with Google)
 
-This guide describes how the mobile app should implement signup and login for tenants and landlords using Google (and other social providers).
+This guide describes how the mobile app should implement signup and login for tenants and landlords using:
+- Firebase social auth (Google, etc.)
+- Manual email OTP auth
 
 ---
 
@@ -80,6 +82,46 @@ Store `token` and `user` in secure storage. Use `token` for all subsequent API c
 
 ---
 
+## 1B. Manual Email OTP Flow (Alternative)
+
+Use this flow if your mobile app asks only for email and OTP.
+
+### Step 1: Request OTP
+
+```
+POST /api/auth/otp/request
+Content-Type: application/json
+Body: { "email": "user@example.com" }
+```
+
+### Step 2: Verify OTP and receive backend token
+
+```
+POST /api/auth/otp/verify
+Content-Type: application/json
+Body: { "email": "user@example.com", "otp": "123456" }
+```
+
+Response includes:
+- `token` (backend JWT)
+- `onboardingRequired` flag
+- `user`
+
+### Step 3: Complete onboarding if needed
+
+If `onboardingRequired: true`:
+
+```
+POST /api/auth/onboarding
+Authorization: Bearer <backend_token>
+Content-Type: application/json
+Body: { "name": "Kgabo", "surname": "Baloyi", "role": "tenant" }
+```
+
+Then continue using returned backend token for protected API calls.
+
+---
+
 ## 2. Using the Backend Token
 
 For protected routes (properties, applications, etc.), send:
@@ -118,6 +160,9 @@ Response: `{ "success": true, "token": "<new_token>" }`
 |--------|------|------|-------------|
 | POST | /api/auth/sync | Bearer (Firebase ID token) | Sync user, optional body `{ appRole }` for new users |
 | POST | /api/auth/firebase | None | Body `{ idToken, registrationType?, appRole? }` |
+| POST | /api/auth/otp/request | None | Body `{ email }` (send OTP) |
+| POST | /api/auth/otp/verify | None | Body `{ email, otp }` (issue JWT) |
+| POST | /api/auth/onboarding | Bearer (backend JWT) | Body `{ name, surname, role }` |
 | POST | /api/auth/refresh | Bearer (backend JWT) | Get new token |
 | GET | /api/properties | None | List properties |
 | POST | /api/properties | Bearer | Create property (landlord) |

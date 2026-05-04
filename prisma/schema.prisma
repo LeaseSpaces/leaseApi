@@ -29,6 +29,7 @@ model User {
 
   points          UserPoints?
   transactions    PointTransaction[]
+  emailOtps       EmailOtp[]
 
   // LeaseSpaces: 2FA and app role
   twofa_secret    String?
@@ -374,4 +375,19 @@ model PointTransaction {
   createdAt DateTime @default(now())
 
   user      User     @relation(fields: [userId], references: [id])
+}
+
+model EmailOtp {
+  id         String   @id @default(uuid())
+  email      String
+  codeHash   String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
+  userId     Int?
+
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([email, expiresAt])
+  @@index([userId])
 }

@@ -77,6 +77,9 @@ All errors return JSON in this shape:
 | GET | `/api/auth` | None | Health check; returns available auth endpoints |
 | POST | `/api/auth/firebase` | None | Body: `{ idToken, registrationType?, appRole? }`. Verifies Firebase token, syncs user, returns `{ success, user, token }`. `appRole` ("tenant"\|"landlord") for new users. |
 | POST | `/api/auth/sync` | None | Header: `Authorization: Bearer <firebase_id_token>`. Optional body: `{ appRole?: "tenant" \| "landlord" }` for new users. Returns `{ success, user, token }` |
+| POST | `/api/auth/otp/request` | None | Body: `{ email }`. Sends a 6-digit OTP to email and stores a 5-minute OTP record. Creates user if missing. |
+| POST | `/api/auth/otp/verify` | None | Body: `{ email, otp }`. Verifies OTP, issues backend JWT, returns `onboardingRequired`. |
+| POST | `/api/auth/onboarding` | Bearer (backend JWT) | Body: `{ name, surname, role: "tenant"\|"landlord" }`. Completes first-time profile setup after OTP login. |
 | POST | `/api/auth/refresh` | Bearer (backend JWT) | Returns new token. |
 | POST | `/api/auth/2fa/verify-login` | None | Body: `{ temporaryToken, otp }`. Admin 2FA flow. |
 
@@ -191,8 +194,8 @@ Compared to the original LeaseSpaces API spec, the following are **not implement
 
 | Endpoint | Status |
 |----------|--------|
-| POST `/auth/register` (email/password) | ❌ Missing – use Firebase Auth + `/auth/sync` instead |
-| POST `/auth/login` (email/password) | ❌ Missing – use Firebase Auth + `/auth/sync` instead |
+| POST `/auth/register` (email/password) | ⚠️ Replaced by manual OTP flow (`/auth/otp/request`, `/auth/otp/verify`, `/auth/onboarding`) |
+| POST `/auth/login` (email/password) | ⚠️ Replaced by Firebase sync or manual OTP flow |
 | POST `/auth/reset-password` | ❌ Missing |
 | POST `/auth/verify-email` | ❌ Missing |
 
@@ -280,6 +283,9 @@ Compared to the original LeaseSpaces API spec, the following are **not implement
 | `JWT_SECRET` | Backend JWT signing secret (ensure this matches your app config; some envs may use alternate names) |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to Firebase service account JSON (for token verification) |
 | `API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `STORAGE_BUCKET`, `MESSAGING_SENDER_ID`, `APP_ID` | Firebase client config |
+| `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_SENDER` | SMTP identity for OTP emails |
+| `SMTP_SERVER`, `SMTP_PORT` | SMTP host/port for OTP delivery |
+| `EMAIL_USE_SSL`, `EMAIL_USE_STARTTLS`, `EMAIL_TIMEOUT` | SMTP connection mode/timeouts for OTP email |
 | `SMTP_SECRET_KEY`, `SMTP_SECRET_IV` | For settings (SMTP encryption) |
 
 ---
@@ -320,7 +326,7 @@ Reference for recently added or extended areas: deployment URLs, mobile auth, su
 | Environment | Base URL |
 |-------------|----------|
 | Local | `http://localhost:<PORT>` — default port **8080**; override with env `PORT` (e.g. `PORT=8081`) |
-| Firebase Functions (project `easespaces-7d30b`) | **Recommended:** Cloud Run URL for the `api` function (stable path): `https://<run-host>/api` (see deploy output after `firebase deploy`) |
+| Firebase Functions (project `easespaces-7d30b`) | **Recommended:** Cloud Run URL for the `api` function: `https://api-jfh4l76lzq-bq.a.run.app/api` |
 | Firebase Functions (`cloudfunctions.net`) | `https://africa-south1-easespaces-7d30b.cloudfunctions.net/api` — paths are **`/api/...`** (e.g. `GET .../api/auth`). Legacy double prefix `.../api/api/...` still works for compatibility. |
 
 All JSON API routes are mounted under **`/api/`** in Express. The app is also mounted at `/` for Firebase path quirks, so the same routes exist at `/admin/...` and `/api/admin/...`; **prefer `/api/...`** in clients. Set **`baseURL`** to a single value ending in `/api` and use **relative** paths (e.g. `/admin/properties`) so the client does not produce `.../api/api/...`.
