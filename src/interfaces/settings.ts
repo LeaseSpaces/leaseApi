@@ -24,14 +24,14 @@ export interface AppSettings {
     updatedAt: Date;
 }
 
-export type SmtpEncryption = 'tls' | 'ssl' | 'none';
-
 export interface SmtpConfig {
     host: string;
     port: number;
     username: string;
     password: string;
-    encryption: SmtpEncryption;
+    useSsl: boolean;
+    useStartTls: boolean;
+    timeout: number;
     fromEmail: string;
     fromName: string;
     isActive: boolean;
@@ -69,7 +69,9 @@ export interface TestSmtpRequest {
     port: number;
     username: string;
     password: string;
-    encryption: SmtpEncryption;
+    useSsl: boolean;
+    useStartTls: boolean;
+    timeout: number;
     fromEmail: string;
     fromName: string;
 }
@@ -78,6 +80,14 @@ export interface TestSmtpResponse {
     success: boolean;
     message: string;
     error?: string;
+}
+
+export interface StaticPageRequest {
+    content: string;
+}
+
+export interface UpdateStaticPageRequest {
+    content?: string;
 }
 
 export interface FileUploadResponse {

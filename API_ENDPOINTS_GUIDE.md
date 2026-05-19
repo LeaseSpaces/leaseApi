@@ -3,14 +3,21 @@
 Use this guide to connect the **main app** (tenant/landlord) and the **admin dashboard** to their dedicated API endpoints.
 
 **Base URL (local):** `http://localhost:8080` by default, or set env **`PORT`** (e.g. `8081`).  
-**Base URL (production):** `https://api-jfh4l76lzq-bq.a.run.app/api`
+**Base URL (production):** `https://api3-jfh4l76lzq-bq.a.run.app/api` (**api3**, recommended for new clients)
 
-- **Firebase Functions (recommended stable URL):** use the **Cloud Run** URL printed after `firebase deploy --only functions` (format `https://<id>.<region>.run.app/api`).
+- **Legacy:** `https://api-jfh4l76lzq-bq.a.run.app/api` (**api** — same Express app)
+- **Firebase Functions:** use the **Cloud Run** URL printed after `firebase deploy --only functions` (format `https://<id>.<region>.run.app/api`).
 - **`cloudfunctions.net`:** `https://africa-south1-easespaces-7d30b.cloudfunctions.net/api` — call paths like **`/api/auth`**, **`/api/admin/properties`**, etc. (Do **not** double the host in the client; set `VITE_API_URL` to the base that already ends with `/api` or to the origin only, never `cloudfunctions.net` + full URL again.)
 
 All endpoints below are under **`/api/`** (e.g. `GET /api/auth` → `{base}/api/auth`).
 
-**Auth:** Most protected app routes accept **backend JWT** or **Firebase ID token** where `appAuth` / `firebaseAuth` is used. Get a backend JWT from **POST /api/auth/sync** (Firebase ID token in `Authorization`) or **POST /api/admin/login** (Prisma admin username/password).
+**Auth:** Protected routes use **`appAuth`** unless noted — accepts **either**:
+- **Backend JWT** from `POST /api/admin/login` (admin panel) or `POST /api/auth/sync` / OTP verify (app)
+- **Firebase ID token** from Google/email sign-in
+
+Header: `Authorization: Bearer <token>`
+
+**Admin panel:** Prefer **`POST /api/admin/login`** → use returned **`token`** (not `temporaryToken` from the 2FA step until OTP is verified).
 
 ---
 
@@ -41,7 +48,7 @@ Use these endpoints in the **main LeaseSpaces app** (browse properties, apply, m
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/api/properties` | None | List properties. Query: `page`, `limit`, `location`, `minPrice`, `maxPrice`, `propertyType`, `bedrooms`, `bathrooms`, `rentalType`, `amenities`, `sortBy`, `sortOrder`. |
+| GET | `/api/properties` | None | List **approved + available** listings only (browse). Query: `page`, `limit`, `location`, `minPrice`, `maxPrice`, `propertyType`, `bedrooms`, `bathrooms`, `rentalType`, `amenities`, `sortBy`, `sortOrder`. |
 | GET | `/api/properties/:propertyId` | None | Get one property by ID. |
 | POST | `/api/properties/search` | None | Search. Body: `{ "query?", "filters?", "sortBy?", "sortOrder?" }`. |
 | POST | `/api/properties` | Backend JWT or Firebase ID token | Create property (landlord). Body: `title`, `description`, `price`, `propertyType`, `rentalType`, `bedrooms`, `bathrooms`, `location`, etc. |
@@ -52,21 +59,166 @@ Use these endpoints in the **main LeaseSpaces app** (browse properties, apply, m
 
 ---
 
-### 1.3 Applications (tenant applications)
+### 1.3 Apply for rental (multi-step — matches mobile UI)
+
+**Auth:** Backend JWT (OTP token) or Firebase ID token.
+
+#### Step 0 — Load form + property summary
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/properties/:propertyId/apply-form` | Property rent label, step field schema, `existingDraft` if any |
+| GET | `/api/mobile/properties/:propertyId/apply-form` | Same (mobile prefix) |
+
+#### Step 1 — Personal info (create or update draft)
+
+| Method | Endpoint | Body |
+|--------|----------|------|
+| POST | `/api/applications` | Create **draft**. See body below. |
+| PATCH | `/api/applications/:applicationId` | Update personal info on draft |
+
+```json
+{
+  "propertyId": "uuid",
+  "moveInDate": "2026-06-01",
+  "annualIncome": 75000,
+  "currentEmployment": "Acme Corp — Developer",
+  "reference1": "Jane Doe — jane@example.com",
+  "reference2": "John Smith — 082 123 4567",
+  "message": "Tell the landlord why you'd be a great tenant..."
+}
+```
+
+#### Step 2 — Documents (multipart or JSON)
+
+| Method | Endpoint | Body |
+|--------|----------|------|
+| POST | `/api/applications/:applicationId/documents` | **Multipart** `multipart/form-data`: field names `governmentId`, `proofOfIncome`, `referenceLetters` (optional). PDF/JPG/PNG, max 10MB each. **Do not** set `Content-Type` manually (let the client add the boundary). |
+| POST | (same) | **JSON fallback:** `Content-Type: application/json` with `{ "governmentId": { "fileName", "mimeType", "data": "<base64>" }, ... }` |
+
+Also: `/api/mobile/applications/:applicationId/documents`
+
+#### Step 3 — Review & submit
+
+| Method | Endpoint | Body |
+|--------|----------|------|
+| GET | `/api/applications/:applicationId` | Summary for review screen |
+| POST | `/api/applications/:applicationId/submit` | `{ "termsAccepted": true }` — sets status `pending`, creates chat `conversation` |
+
+**Submit response** includes `application` (summary), `conversation`, and `message` (“reviewed within 2–3 business days”).
+
+#### Tenant — my applications
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/applications` | List my submitted applications (excludes drafts). Query: `status`, `page`, `limit`. |
+
+#### Landlord — review incoming (own properties)
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/api/applications` | Backend JWT or Firebase ID token | List current user’s applications. Query: `status`, `page`, `limit`. |
-| POST | `/api/applications` | Backend JWT or Firebase ID token | Create application. Body: `{ "propertyId": "<uuid>", "moveInDate?", "message?", "documents?" }`. |
-| PUT | `/api/applications/:applicationId/status` | Backend JWT or Firebase ID token | Update status. Body: `{ "status": "approved" \| "rejected", "message?" }`. |
+| GET | `/api/applications/incoming` | Landlord or admin JWT | Applications for properties you own. Query: `status`, `propertyId`, `search`, `page`, `limit`. |
+| GET | `/api/applications/incoming/:applicationId` | Landlord or admin | Full detail: tenant, documents, references, employment, income. |
+| PATCH | `/api/applications/incoming/:applicationId/decision` | Landlord or admin | Body: `{ "decision": "approved" \| "rejected", "reviewNotes?" }`. **Approve** creates an active **lease** and sets property `occupied`. |
 
-**App usage:** Tenant: GET my applications, POST new application. Landlord: PUT to approve/reject (same token).
+**Document verification (vendor — read-only for landlord):** Application detail includes `documentsVerification`: `{ status, verifiedAt, notes, allDocumentsVerified, documents[] }` with per-doc `verificationStatus` (`pending` \| `in_review` \| `verified` \| `rejected`). Admin/vendor updates: `PATCH /api/admin/applications/:id/documents-verification`.
+
+Legacy alias: `PUT /api/applications/:applicationId/status` with `{ "status": "approved" \| "rejected" }`.
+
+**Mobile parity:** `/api/mobile/applications/*` — same routes and bodies.
 
 ---
 
-### 1.4 Mobile parity (`/api/mobile`)
+### 1.8 Landlord portal (`/api/landlord`)
 
-Same as **`/api/properties`** and **`/api/applications`**, prefixed with `/mobile` (legacy register/login + browse + applications).
+**Auth:** `appRole: landlord` or `admin`. Header: `Authorization: Bearer <token>`.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/landlord/properties` | My listings (all moderation/availability states) |
+| POST | `/api/landlord/properties` | Create listing → `moderationStatus: pending_approval` |
+| PUT | `/api/landlord/properties/:propertyId` | Update own listing (cannot change moderation/availability) |
+| DELETE | `/api/landlord/properties/:propertyId` | Delete own listing |
+| GET | `/api/landlord/applications` | Incoming applications (same as `/api/applications/incoming`) |
+| GET | `/api/landlord/applications/:applicationId` | Application detail + `documentsVerification` |
+| PATCH | `/api/landlord/applications/:applicationId/decision` | Approve / reject |
+| GET | `/api/landlord/leases` | My active/past leases |
+| GET | `/api/landlord/maintenance` | Maintenance requests for my properties. Query: `status`, `propertyId` |
+| PATCH | `/api/landlord/maintenance/:requestId` | Update status: `open` \| `in_progress` \| `resolved` \| `closed` |
+
+**Alias:** `/api/applications/incoming/*` — same handlers as landlord applications.
+
+---
+
+### 1.9 Leases (occupied properties)
+
+When an application is **approved**, a **Lease** is created and the property becomes **`occupied`**. Both tenant and landlord can view the agreement.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/leases/me` | Tenant or landlord | List my leases. Query: `status` (`active` \| `ended` \| `cancelled`) |
+| GET | `/api/leases/:leaseId` | Tenant or landlord | Lease detail incl. `agreementUrl`, rent, dates |
+| GET | `/api/properties/:propertyId/lease` | Tenant or landlord | Active lease for this property (if you are the tenant or landlord) |
+
+**Lease object (excerpt):**
+```json
+{
+  "id": "uuid",
+  "status": "active",
+  "propertyTitle": "Luxury Apartment in Sandton",
+  "startDate": "2026-07-01",
+  "endDate": null,
+  "monthlyRent": 2500,
+  "monthlyRentLabel": "R2 500",
+  "agreementUrl": "https://...",
+  "agreementNotes": "Standard LeaseSpaces rental agreement..."
+}
+```
+
+---
+
+### 1.10 Maintenance (tenant reports, landlord manages)
+
+Tenants with an **active lease** on a property can report issues.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/maintenance` | Tenant | Body: `{ propertyId, title, description, priority?, images? }`. `priority`: `low` \| `medium` \| `high` \| `urgent` |
+| GET | `/api/maintenance` | Tenant | My requests. Query: `status` |
+| GET | `/api/maintenance/:requestId` | Tenant | One request |
+| GET | `/api/landlord/maintenance` | Landlord | Queue for my properties |
+| PATCH | `/api/landlord/maintenance/:requestId` | Landlord | Body: `{ "status": "in_progress" }` etc. |
+
+---
+
+### 1.4 Chat (tenant ↔ landlord)
+
+Messages are stored in **Firestore**; API returns ISO timestamps (`sentAt`, `createdAt`, `readAt`). Auth: backend JWT or Firebase ID token.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/properties/:propertyId/chats` | Bearer | Tenant: get chat for listing |
+| POST | `/api/properties/:propertyId/chats` | Bearer | Tenant: **Message landlord** (create/get thread) |
+| GET | `/api/chats` | Bearer | Inbox. Query: `page`, `limit` |
+| POST | `/api/chats` | Bearer | Create/get thread. Body: `propertyId` and/or `applicationId`; landlords add `tenantId` |
+| GET | `/api/chats/:conversationId` | Bearer | Conversation detail + last message |
+| GET | `/api/chats/:conversationId/history` | Bearer | **History** with timestamps. Query: `page`, `limit`, `order`, `after`, `before` |
+| GET | `/api/chats/:conversationId/messages` | Bearer | Same as `/history` |
+| POST | `/api/chats/:conversationId/messages` | Bearer | Send. Body: `{ "body": "..." }` |
+| POST | `/api/chats/:conversationId/read` | Bearer | Mark read |
+| GET | `/api/chats/:conversationId/stream` | Bearer | SSE (optional) |
+
+**Conversation id:** `{propertyId}_{tenantId}`
+
+**Tenant flow:** `POST .../properties/:id/chats` → `GET .../chats/:id/history` → `POST .../messages`
+
+See **API_DOCUMENTATION.md** → Chat for full request/response examples.
+
+---
+
+### 1.5 Mobile parity (`/api/mobile`)
+
+Legacy mobile API endpoints, mostly wrapping the same property/application flows plus user location support. Use these if your mobile client needs the older `/api/mobile` path prefix.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
@@ -74,10 +226,56 @@ Same as **`/api/properties`** and **`/api/applications`**, prefixed with `/mobil
 | GET | `/api/mobile/properties` | None | List properties |
 | GET | `/api/mobile/properties/:id` | None | Property detail |
 | POST | `/api/mobile/properties/search` | None | Search |
+| GET | `/api/mobile/user-locations` | Backend JWT or Firebase ID token | Get current user locations |
+| PUT | `/api/mobile/update-location/:locationId` | Backend JWT or Firebase ID token | Update a user location |
 | GET/POST | `/api/mobile/applications` | Backend JWT or Firebase ID token | Same as `/api/applications` |
 | PUT | `/api/mobile/applications/:applicationId/status` | Backend JWT or Firebase ID token | Same as `/api/applications/.../status` |
+| GET/POST | `/api/mobile/properties/:propertyId/chats` | Firebase ID token | Tenant property chat shortcuts |
+| * | `/api/mobile/chats/*` | Backend JWT or Firebase (`appAuth`) | Same as `/api/chats/*` |
 
-### 1.5 Support tickets (`/api/tickets`)
+### 1.6 Public support (`/api/support`) — no login
+
+Use for the **“Create support ticket”** flow in the app or website.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/support/form` | None | Categories for the form + `defaultPriority` |
+| GET | `/api/support/categories` | None | Same as `/form` |
+| POST | `/api/support/tickets` | None | Submit ticket; confirmation email sent to submitter (`customerEmail`) |
+
+**POST body:**
+```json
+{
+  "category": "Account & Login",
+  "description": "I cannot reset my password after multiple attempts...",
+  "customerEmail": "user@example.com",
+  "confirmEmail": "user@example.com",
+  "customerName": "Jane Doe"
+}
+```
+
+**POST response `201`:**
+```json
+{
+  "success": true,
+  "ticket": {
+    "id": "...",
+    "ticketNumber": "TKT-042",
+    "category": "Account & Login",
+    "status": "Sent",
+    "createdAt": "..."
+  },
+  "emailSent": true,
+  "confirmationEmailSentTo": "user@example.com",
+  "message": "Your support ticket has been received. A confirmation email was sent to user@example.com..."
+}
+```
+
+Confirmation is emailed to the submitter only, not to support agents.
+
+---
+
+### 1.7 Support tickets admin (`/api/tickets`)
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
@@ -104,22 +302,41 @@ Use these endpoints in the **admin dashboard** (LeaseSpaces admin app).
 
 ### 2.1 Auth for admin
 
-- Same as app: **POST /api/auth/sync** with Firebase ID token → get backend JWT.
-- The user must have **`appRole: "admin"`** in the database to access admin-only routes below.
-- **Prisma admin (username = email):** **POST /api/admin/login** with `{ "username", "password" }` → backend JWT (or 2FA flow).
-- Optional legacy Firestore: **POST /api/admin/admin-login** with `{ "email", "password" }`.
+**Recommended (admin dashboard):**
+
+```http
+POST /api/admin/login
+Content-Type: application/json
+
+{ "username": "admin@leasespaces.local", "password": "..." }
+```
+
+**Response (no 2FA):**
+```json
+{ "success": true, "token": "eyJhbG...", "user": { "id": 1, "role": "admin", ... } }
+```
+
+Use **`token`** on every admin request: `Authorization: Bearer <token>`.
+
+| Case | What to send |
+|------|----------------|
+| Normal login | `token` from response |
+| 2FA enabled | `requires2fa: true` + `temporaryToken` → complete OTP → use **final** `token`, **not** `temporaryToken` |
+| Google sign-in admin | Firebase ID token also works (`appAuth`) if user has `appRole: admin` |
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | `/api/auth/sync` | Firebase ID token | Use same as app; ensure user is admin in DB. |
-| POST | `/api/admin/login` | None | Prisma admin login. Body: `{ "username", "password" }`. |
-| POST | `/api/admin/admin-login` | None | Legacy Firestore. Body: `{ "email", "password" }`. |
+| POST | `/api/admin/login` | None | **Primary.** Body: `{ "username", "password" }` (username = email). |
+| POST | `/api/auth/sync` | Firebase ID token | Alternative; user must be `appRole: admin` in DB. |
+| POST | `/api/admin/admin-login` | None | Legacy Firestore admin. |
+
+**401 `INVALID_TOKEN`?** Use `token` from `/api/admin/login`, not Firebase unless using Google sign-in. See `error.hint` in the JSON body.
 
 ---
 
-### 2.2 Admin-only routes (require backend JWT + appRole admin)
+### 2.2 Admin-only routes (`appAuth` + `appRole: admin`)
 
-Send **`Authorization: Bearer <backend_jwt>`** or **Firebase ID token** where noted (`appAuth`); user must have `appRole: "admin"`.
+All routes below accept **`Authorization: Bearer <token>`** where `<token>` is the backend JWT from **`POST /api/admin/login`** **or** a Firebase ID token.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -127,6 +344,9 @@ Send **`Authorization: Bearer <backend_jwt>`** or **Firebase ID token** where no
 | GET | `/api/admin/properties/analytics` | Property analytics. Query: `period=7d \| 30d \| 90d \| 1y`. |
 | POST | `/api/admin/users/admins` | **Super admin only**: Create admin user. Body: `{ name, surname, email, password, isSuperAdmin? }`. |
 | POST | `/api/admin/support/agents` | **Super admin only**: Create support agent. Body: `{ name, email, role?, maxTickets?, isActive? }`. |
+| POST | `/api/admin/users/:userId/2fa/init` | **Super admin:** generate secret + QR for user. |
+| POST | `/api/admin/users/:userId/2fa/enable` | **Super admin:** Body `{ "secret", "otp" }`. |
+| POST | `/api/admin/users/:userId/2fa/disable` | **Super admin:** disable 2FA for user. |
 | GET | `/api/admin/properties` | Admin property list (table). Query: `q`, `type`, `location`, `minPrice`, `maxPrice`, `moderationStatus`, `availabilityStatus`, `page`, `limit`, `sortBy`, `sortOrder`. |
 | GET | `/api/admin/properties/:propertyId` | Admin property details (modal). |
 | PATCH | `/api/admin/properties/:propertyId/moderation` | Moderate property. Body: `{ action: "approve"|"decline"|"flag_for_review"|"set_pending", notes? }` (notes required when flagging). |
@@ -134,22 +354,95 @@ Send **`Authorization: Bearer <backend_jwt>`** or **Firebase ID token** where no
 | GET | `/api/admin/admin-profile` | Admin profile (current user). |
 | DELETE | `/api/admin/delete-admin` | Delete current admin (high-security). Body: `{ "otp": "<totp_code>" }` when 2FA enabled. |
 
+#### Rental applications (admin review)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/admin/applications` | List all applications. Query: `status`, `propertyId`, `landlordId`, `tenantId`, `search`, `page`, `limit`, `sortBy`, `sortOrder`, `includeDrafts=true`. Default excludes drafts. |
+| GET | `/api/admin/applications/:applicationId` | Full application for review (tenant, property, landlord, documents, references). |
+| PATCH | `/api/admin/applications/:applicationId/decision` | Approve or reject. Body: `{ "decision": "approved" \| "rejected", "reviewNotes?" }`. Only **pending** applications. |
+
+**Example approve:**
+```json
+PATCH /api/admin/applications/{id}/decision
+{ "decision": "approved", "reviewNotes": "Strong application — approved." }
+```
+
 ---
 
-### 2.3 Admin settings (app config, SMTP, upload)
+### 2.3 Settings (public + admin)
 
-Still under admin; can be used with or without auth depending on your setup (see your routes). Typically use the same backend JWT for consistency.
+**Public (main app, no auth):**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/settings/app` | App branding/settings |
+| GET | `/api/settings/about` | About page |
+| GET | `/api/settings/privacy-policy` | Privacy policy |
+| GET | `/api/settings/terms-and-conditions` | Terms & conditions |
+
+**Admin (`/api/admin/settings/*`) — requires `Authorization: Bearer <token>` + `appRole: admin`. Returns `401` without a valid token.**
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/admin/settings/app` | Get app settings. |
 | POST | `/api/admin/settings/app` | Create app settings. |
 | PUT | `/api/admin/settings/app` | Update app settings. |
+| GET | `/api/admin/settings/about` | Get About page content. |
+| POST | `/api/admin/settings/about` | Save About page content. |
+| PUT | `/api/admin/settings/about` | Update About page content. |
+| DELETE | `/api/admin/settings/about` | Delete About page content. |
+| GET | `/api/admin/settings/privacy-policy` | Get Privacy Policy content. |
+| POST | `/api/admin/settings/privacy-policy` | Save Privacy Policy content. |
+| PUT | `/api/admin/settings/privacy-policy` | Update Privacy Policy content. |
+| DELETE | `/api/admin/settings/privacy-policy` | Delete Privacy Policy content. |
+| GET | `/api/admin/settings/terms-and-conditions` | Get Terms & Conditions content. |
+| POST | `/api/admin/settings/terms-and-conditions` | Save Terms & Conditions content. |
+| PUT | `/api/admin/settings/terms-and-conditions` | Update Terms & Conditions content. |
+| DELETE | `/api/admin/settings/terms-and-conditions` | Delete Terms & Conditions content. |
 | GET | `/api/admin/settings/smtp` | Get SMTP config. |
 | POST | `/api/admin/settings/smtp` | Save SMTP config. |
 | PUT | `/api/admin/settings/smtp` | Update SMTP config. |
 | POST | `/api/admin/settings/smtp/test` | Test SMTP connection. Body: SMTP params. |
 | POST | `/api/admin/settings/upload` | Upload file (multipart). |
+
+#### SMTP Configuration Details
+
+**SMTP Settings Request Body (POST/PUT):**
+```json
+{
+  "host": "smtp.gmail.com",
+  "port": 465,
+  "username": "your-email@gmail.com",
+  "password": "your-app-password",
+  "useSsl": true,
+  "useStartTls": false,
+  "timeout": 20000,
+  "fromEmail": "noreply@yourapp.com",
+  "fromName": "Your App Name",
+  "isActive": true
+}
+```
+
+**SMTP Test Request Body:**
+```json
+{
+  "host": "smtp.gmail.com",
+  "port": 465,
+  "username": "your-email@gmail.com",
+  "password": "your-app-password",
+  "useSsl": true,
+  "useStartTls": false,
+  "timeout": 20000,
+  "fromEmail": "noreply@yourapp.com",
+  "fromName": "Your App Name"
+}
+```
+
+**Common SMTP Configurations:**
+- **Gmail**: `host: "smtp.gmail.com"`, `port: 465`, `useSsl: true`, `useStartTls: false` ✅ (currently configured)
+- **Outlook/Office 365**: `host: "smtp.office365.com"`, `port: 587`, `useSsl: false`, `useStartTls: true`
+- **Plain SMTP**: `host: "your-smtp-server.com"`, `port: 25`, `useSsl: false`, `useStartTls: false`
 
 ---
 
@@ -176,21 +469,23 @@ Still under admin; can be used with or without auth depending on your setup (see
   - `GET /api/properties/:id`, `POST /api/properties/search`
   - `PUT/DELETE /api/properties/:id`
   - `GET/POST /api/applications`, `PUT /api/applications/:id/status`
+  - `POST /api/properties/:id/chats`, `GET/POST /api/chats/...` (messaging)
 
 ### Admin dashboard
 
-- **Base:** `{{baseUrl}}/api`
-- **Login:** `POST /api/auth/sync` (Firebase) **or** `POST /api/admin/login` (username/password). For super-admin-only actions, user needs `isSuperAdmin: true` (see `GET /api/admin/admin-profile`).
-- **Then use:** `Authorization: Bearer {{token}}` for:
-  - `GET /api/admin/dashboard`
-  - `GET /api/admin/properties/analytics?period=30d`
-  - `GET /api/admin/properties` (table), `GET /api/admin/properties/:id`, `PATCH .../moderation`, `PATCH .../availability`
-  - `POST /api/admin/users/admins`, `POST /api/admin/support/agents` (super admin only)
-  - `GET /api/admin/admin-profile`
-  - `GET/POST/PUT /api/admin/settings/app`
-  - `GET/POST/PUT /api/admin/settings/smtp`, `POST /api/admin/settings/smtp/test`
-  - `POST /api/admin/settings/upload`
-  - `DELETE /api/admin/delete-admin` (with body `{ "otp": "..." }` if 2FA enabled)
+- **Base:** `https://api3-jfh4l76lzq-bq.a.run.app/api` (or local `http://localhost:8080/api`)
+- **Login:** `POST /api/admin/login` → store **`token`**
+- **Header:** `Authorization: Bearer {{token}}` on all admin routes
+- **Smoke test:** `npm run test:admin`
+- **Endpoints:** dashboard, profile, properties, applications, locations, settings (all under `/api/admin/...`)
+- **Public reads (no auth):** `GET /api/settings/app`, `/about`, etc. — for mobile branding only
+- **Super admin:** `isSuperAdmin: true` for `POST /api/admin/users/admins`, support agents, user 2FA management
+
+### Landlord site
+
+- **Login:** OTP or Firebase → `appRole: landlord`
+- **Base paths:** `/api/landlord/properties`, `/api/landlord/applications`, `/api/landlord/leases`, `/api/landlord/maintenance`
+- **Occupied unit:** `GET /api/properties/:id/lease` for lease agreement URL
 
 ---
 

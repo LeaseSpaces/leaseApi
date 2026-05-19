@@ -25,12 +25,12 @@ export const generateTicketNumber = async (): Promise<string> => {
         orderBy: { createdAt: 'desc' }
     });
 
-    if (!lastTicket) {
+    if (!lastTicket?.ticketNumber?.startsWith('TKT-')) {
         return 'TKT-001';
     }
 
-    const lastNumber = parseInt(lastTicket.ticketNumber.replace('TKT-', ''));
-    const nextNumber = lastNumber + 1;
+    const lastNumber = parseInt(lastTicket.ticketNumber.replace('TKT-', ''), 10);
+    const nextNumber = Number.isFinite(lastNumber) ? lastNumber + 1 : 1;
     return `TKT-${nextNumber.toString().padStart(3, '0')}`;
 }
 
@@ -191,11 +191,14 @@ export const createTicket = async (data: CreateTicketRequest): Promise<Ticket> =
         where: { email: data.customerEmail }
     });
 
+    const subjectLabel = data.subject?.trim() || data.category;
+    const uniqueSubject = `${ticketNumber} · ${subjectLabel}`;
+
     const ticket = await prisma.ticket.create({
         // @ts-ignore
         data: {
             ticketNumber,
-            subject: data.subject,
+            subject: uniqueSubject,
             description: data.description,
             status: 'Sent',
             customerId: data.customerId ?? customerUser?.id?.toString() ?? '',

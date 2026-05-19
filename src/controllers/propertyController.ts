@@ -21,7 +21,7 @@ export async function getProperties(req: Request, res: Response): Promise<void> 
       sortBy: req.query.sortBy as "price" | "date" | "location" | undefined,
       sortOrder: req.query.sortOrder as "asc" | "desc" | undefined,
     };
-    const result = await propertyService.getProperties(filters);
+    const result = await propertyService.getProperties({ ...filters, publicBrowse: true });
     res.status(200).json({ success: true, ...result });
   } catch (error) {
     res.status(500).json({

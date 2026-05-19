@@ -1,6 +1,9 @@
+import 'dotenv/config';
 import express, { Application } from "express";
 import cors from "cors";
+import path from "path";
 import Routes from "./routes";
+import { APPLICATIONS_UPLOAD_DIR } from "./middleware/applicationDocumentParser";
 
 const app: Application = express();
 
@@ -8,6 +11,8 @@ const app: Application = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cors());
+app.use("/uploads/applications", express.static(APPLICATIONS_UPLOAD_DIR));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Techy landing page with animations
 app.get("/", (_req, res) => {

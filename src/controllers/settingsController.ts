@@ -9,6 +9,10 @@ import {
     getAppSettings,
     saveAppSettings,
     updateAppSettings,
+    getStaticPage,
+    saveStaticPage,
+    updateStaticPage,
+    deleteStaticPage,
     getSmtp,
     saveSmtp,
     updateSmtp,
@@ -17,6 +21,8 @@ import {
 import {
     CreateAppSettingsRequest,
     UpdateAppSettingsRequest,
+    StaticPageRequest,
+    UpdateStaticPageRequest,
     SaveSmtpRequest,
     UpdateSmtpRequest
 } from '../interfaces/settings';
@@ -100,6 +106,78 @@ export const updateAppSettingsController = async (req: Request, res: Response) =
     }
 };
 
+const handleStaticPage = (page: 'about' | 'privacy' | 'terms') => ({
+    get: async (_req: Request, res: Response) => {
+        try {
+            const content = await getStaticPage(page);
+            if (content === null) {
+                res.status(404).json({ error: 'Not found', message: `No ${page} content configured yet` });
+                return;
+            }
+            res.status(200).json({ content });
+        } catch (e) {
+            res.status(500).json({ error: 'Internal server error', message: `Failed to retrieve ${page} content` });
+        }
+    },
+    save: async (req: Request, res: Response) => {
+        try {
+            const body: StaticPageRequest = req.body;
+            if (!body.content) {
+                res.status(400).json({ error: 'Validation error', message: 'content is required' });
+                return;
+            }
+            const saved = await saveStaticPage(page, body.content);
+            res.status(201).json({ content: saved });
+        } catch (e) {
+            res.status(500).json({ error: 'Internal server error', message: `Failed to save ${page} content` });
+        }
+    },
+    update: async (req: Request, res: Response) => {
+        try {
+            const body: UpdateStaticPageRequest = req.body;
+            if (body.content === undefined) {
+                res.status(400).json({ error: 'Validation error', message: 'content is required' });
+                return;
+            }
+            const updated = await updateStaticPage(page, body.content);
+            if (updated === null) {
+                res.status(404).json({ error: 'Not found', message: `No ${page} content found to update` });
+                return;
+            }
+            res.status(200).json({ content: updated });
+        } catch (e) {
+            res.status(500).json({ error: 'Internal server error', message: `Failed to update ${page} content` });
+        }
+    },
+    remove: async (_req: Request, res: Response) => {
+        try {
+            const deleted = await deleteStaticPage(page);
+            if (!deleted) {
+                res.status(404).json({ error: 'Not found', message: `No ${page} content found to delete` });
+                return;
+            }
+            res.status(200).json({ success: true, message: `${page} content deleted` });
+        } catch (e) {
+            res.status(500).json({ error: 'Internal server error', message: `Failed to delete ${page} content` });
+        }
+    }
+});
+
+export const getAboutController = handleStaticPage('about').get;
+export const saveAboutController = handleStaticPage('about').save;
+export const updateAboutController = handleStaticPage('about').update;
+export const deleteAboutController = handleStaticPage('about').remove;
+
+export const getPrivacyPolicyController = handleStaticPage('privacy').get;
+export const savePrivacyPolicyController = handleStaticPage('privacy').save;
+export const updatePrivacyPolicyController = handleStaticPage('privacy').update;
+export const deletePrivacyPolicyController = handleStaticPage('privacy').remove;
+
+export const getTermsController = handleStaticPage('terms').get;
+export const saveTermsController = handleStaticPage('terms').save;
+export const updateTermsController = handleStaticPage('terms').update;
+export const deleteTermsController = handleStaticPage('terms').remove;
+
 export const getSMTPConfigController = async (_req: Request, res: Response) => {
     try {
         const cfg = await getSmtp();
@@ -116,7 +194,7 @@ export const getSMTPConfigController = async (_req: Request, res: Response) => {
 export const saveSMTPConfigController = async (req: Request, res: Response) => {
     try {
         const body: SaveSmtpRequest = req.body;
-        const required: (keyof SaveSmtpRequest)[] = ['host', 'port', 'username', 'password', 'encryption', 'fromEmail', 'fromName', 'isActive'];
+        const required: (keyof SaveSmtpRequest)[] = ['host', 'port', 'username', 'password', 'useSsl', 'useStartTls', 'timeout', 'fromEmail', 'fromName', 'isActive'];
         for (const f of required) {
             if ((body as any)[f] === undefined || (body as any)[f] === null || (body as any)[f] === '') {
                 res.status(400).json({ error: 'Validation error', message: `${f} is required` });

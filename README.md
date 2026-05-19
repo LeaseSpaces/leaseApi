@@ -27,12 +27,19 @@ Server runs at **http://localhost:8080**. API routes are under `/api/`.
 ## Tech Stack
 
 - **Node.js** · **Express.js** · **TypeScript**
-- **Firebase Admin SDK** · **Prisma** · **Neon (PostgreSQL)**
+- **Firebase Admin SDK** · **Prisma** · **Neon (PostgreSQL)**  
 - **JWT** · **CORS** · **Multer** (uploads)
 
 ---
 
 ## API Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) | Full reference (auth, properties, applications, **chat**, admin, settings) |
+| [API_ENDPOINTS_GUIDE.md](./API_ENDPOINTS_GUIDE.md) | App vs admin endpoint guide |
+| [AUTH_AND_2FA_ENDPOINTS.md](./AUTH_AND_2FA_ENDPOINTS.md) | Auth, OTP, 2FA flows |
+| [POSTMAN_AUTH_TESTING.md](./POSTMAN_AUTH_TESTING.md) | Postman testing steps |
 
 ### Base URL & Port
 
@@ -113,6 +120,7 @@ CORS is enabled, so browsers can call the API from any origin. Configure allowed
 | POST | `/api/properties` | Firebase JWT | Create property |
 | PUT | `/api/properties/:propertyId` | Firebase JWT | Update property |
 | DELETE | `/api/properties/:propertyId` | Firebase JWT | Delete property |
+| GET/POST | `/api/properties/:propertyId/chats` | Bearer | Tenant: get/start chat with landlord |
 
 **Query params (GET /properties)**: `page`, `limit`, `location`, `minPrice`, `maxPrice`, `propertyType`, `bedrooms`, `bathrooms`, `rentalType`, `amenities`, `sortBy`, `sortOrder`
 
@@ -121,10 +129,36 @@ CORS is enabled, so browsers can call the API from any origin. Configure allowed
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/applications` | Firebase JWT | List current user's applications |
-| POST | `/api/applications` | Firebase JWT | Create application |
+| POST | `/api/applications` | Firebase JWT | Create application (returns `conversation`) |
 | PUT | `/api/applications/:applicationId/status` | Firebase JWT | Update status (body: `{ status: "approved" \| "rejected", message? }`) |
 
 **Query params (GET)**: `status`, `page`, `limit`
+
+#### Chat (`/api/chats`)
+
+Tenant ↔ landlord messaging. Stored in **Firestore**; REST returns ISO timestamps.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/chats` | Inbox |
+| POST | `/api/chats` | Create/get thread (`propertyId`, `applicationId`, or `tenantId` for landlords) |
+| GET | `/api/chats/:id/history` | Message history (`page`, `limit`, `before`, `after`, `order`) |
+| POST | `/api/chats/:id/messages` | Send message |
+| POST | `/api/chats/:id/read` | Mark read |
+
+Full reference: **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)** (Chat section) and **[API_ENDPOINTS_GUIDE.md](./API_ENDPOINTS_GUIDE.md)**.
+
+**Firebase / Firestore (chat):**
+
+| Goal | Setup |
+|------|--------|
+| Local → **real** Firebase | `GOOGLE_APPLICATION_CREDENTIALS` = service account JSON; **unset** `USE_FIRESTORE_EMULATOR` |
+| Local → **emulator** | `USE_FIRESTORE_EMULATOR=true`, `npm run emulator:firestore`, then `npm run dev` |
+| **Production** | `firebase deploy` — no emulator vars; ADC on Cloud Functions |
+
+See **[FIREBASE_DEPLOY.md](./FIREBASE_DEPLOY.md)** for PowerShell examples and deploy steps.
+
+**Local chat testing (emulator):** `npm run emulator:firestore` + `USE_FIRESTORE_EMULATOR=true` + `npm run test:chat`
 
 #### Admin (`/api/admin`)
 
@@ -141,13 +175,29 @@ CORS is enabled, so browsers can call the API from any origin. Configure allowed
 | GET | `/api/admin/all` | None | List all admins |
 | POST | `/api/admin/forgot-password` | None | Forgot password |
 
-#### Settings (`/api/admin/settings`)
+#### Settings
+
+**Public reads:** `GET /api/settings/app`, `/about`, `/privacy-policy`, `/terms-and-conditions` (no auth).
+
+**Admin writes:** `/api/admin/settings/*` (requires admin JWT).
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/admin/settings/app` | None | Get app settings |
+| GET | `/api/admin/settings/app` | Admin | Get app settings |
 | POST | `/api/admin/settings/app` | None | Save app settings |
 | PUT | `/api/admin/settings/app` | None | Update app settings |
+| GET | `/api/admin/settings/about` | None | Get About page content |
+| POST | `/api/admin/settings/about` | None | Save About page content |
+| PUT | `/api/admin/settings/about` | None | Update About page content |
+| DELETE | `/api/admin/settings/about` | None | Delete About page content |
+| GET | `/api/admin/settings/privacy-policy` | None | Get Privacy Policy content |
+| POST | `/api/admin/settings/privacy-policy` | None | Save Privacy Policy content |
+| PUT | `/api/admin/settings/privacy-policy` | None | Update Privacy Policy content |
+| DELETE | `/api/admin/settings/privacy-policy` | None | Delete Privacy Policy content |
+| GET | `/api/admin/settings/terms-and-conditions` | None | Get Terms & Conditions content |
+| POST | `/api/admin/settings/terms-and-conditions` | None | Save Terms & Conditions content |
+| PUT | `/api/admin/settings/terms-and-conditions` | None | Update Terms & Conditions content |
+| DELETE | `/api/admin/settings/terms-and-conditions` | None | Delete Terms & Conditions content |
 | GET | `/api/admin/settings/smtp` | None | Get SMTP config |
 | POST | `/api/admin/settings/smtp` | None | Save SMTP config |
 | PUT | `/api/admin/settings/smtp` | None | Update SMTP config |
@@ -177,7 +227,9 @@ CORS is enabled, so browsers can call the API from any origin. Configure allowed
 |----------|---------|
 | `DATABASE_URL` | Neon PostgreSQL connection string |
 | `JWT_SECRETE` | Backend JWT signing secret |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to Firebase service account JSON (for token verification) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | **Local only:** path to service account JSON (real Firebase). Not needed on deployed Functions. |
+| `USE_FIRESTORE_EMULATOR` | Set to `true` only for local emulator; **omit** for real Firebase / production |
+| `FIRESTORE_EMULATOR_HOST` | e.g. `127.0.0.1:8085` — only with emulator; **unset** for production |
 | `API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `STORAGE_BUCKET`, `MESSAGING_SENDER_ID`, `APP_ID` | Firebase client config |
 | `SMTP_SECRET_KEY`, `SMTP_SECRET_IV` | For settings (SMTP encryption) |
 

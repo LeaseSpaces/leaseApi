@@ -187,6 +187,9 @@ export const appAuth = (options?: { syncUser?: boolean }) => {
           code: "INVALID_TOKEN",
           message: "Invalid or expired token",
           details: error instanceof Error ? error.message : "Token verification failed",
+          hint:
+            "Admin panel: use the token from POST /api/admin/login in Authorization: Bearer <token>. " +
+            "Do not use temporaryToken from the 2FA step until OTP is verified.",
         },
       });
     }
@@ -242,6 +245,7 @@ export const backendAuth = async (req: AuthRequest, res: Response, next: NextFun
         code: "INVALID_TOKEN",
         message: "Invalid or expired token",
         details: error instanceof Error ? error.message : "Token verification failed",
+        hint: "Use the backend JWT from POST /api/admin/login (not a Firebase ID token unless using Google sign-in).",
       },
     });
   }

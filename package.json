@@ -14,7 +14,16 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node prisma/seed.ts",
     "postinstall": "prisma generate",
-    "serve": "firebase emulators:start --only functions"
+    "serve": "firebase emulators:start --only functions",
+    "emulator:firestore": "firebase emulators:start --only firestore",
+    "test:chat": "ts-node scripts/test-chat-api.ts",
+    "test:chat:prod": "ts-node scripts/test-chat-production.ts",
+    "test:support": "ts-node scripts/test-support-api.ts",
+    "test:smtp": "ts-node scripts/test-smtp-db.ts",
+    "test:prod": "ts-node scripts/test-prod-smoke.ts",
+    "reset-admin-2fa": "ts-node scripts/reset-admin-2fa.ts",
+    "test:application-documents": "ts-node scripts/test-application-documents.ts",
+    "test:admin": "ts-node scripts/test-admin-endpoints.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
@@ -22,6 +31,7 @@
   "dependencies": {
     "@prisma/client": "5.22.0",
     "axios": "^1.6.0",
+    "busboy": "^1.6.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
@@ -36,6 +46,7 @@
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
+    "@types/busboy": "^1.5.4",
     "@types/cors": "^2.8.18",
     "@types/express": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.9",

@@ -20,6 +20,9 @@ export interface PropertyFilters {
   amenities?: string[];
   sortBy?: "price" | "date" | "location";
   sortOrder?: "asc" | "desc";
+  /** Public browse: approved listings that are available only */
+  publicBrowse?: boolean;
+  landlordId?: number;
 }
 
 export interface AdminPropertyFilters {
@@ -53,6 +56,13 @@ export async function getProperties(filters: PropertyFilters = {}) {
   }
   if (filters.amenities?.length) {
     where.amenities = { hasEvery: filters.amenities };
+  }
+  if (filters.publicBrowse) {
+    where.moderationStatus = "approved";
+    where.availabilityStatus = "available";
+  }
+  if (filters.landlordId != null) {
+    where.landlordId = filters.landlordId;
   }
 
   const orderBy: Prisma.PropertyOrderByWithRelationInput =
@@ -279,6 +289,37 @@ export async function deleteProperty(id: string) {
   return prisma.property.delete({ where: { id } });
 }
 
+export async function getPropertiesForLandlord(landlordId: number, filters: PropertyFilters = {}) {
+  return getProperties({ ...filters, landlordId });
+}
+
+export async function assertPropertyOwner(propertyId: string, landlordId: number) {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { landlordId: true },
+  });
+  if (!property) throw new Error("Property not found");
+  if (property.landlordId !== landlordId) throw new Error("You do not own this property");
+  return property;
+}
+
+export async function updatePropertyAsLandlord(
+  propertyId: string,
+  landlordId: number,
+  data: Prisma.PropertyUpdateInput
+) {
+  await assertPropertyOwner(propertyId, landlordId);
+  const blocked = ["landlordId", "moderationStatus", "moderationNotes", "availabilityStatus", "status"];
+  const safe = { ...data };
+  for (const key of blocked) delete (safe as Record<string, unknown>)[key];
+  return updateProperty(propertyId, safe);
+}
+
+export async function deletePropertyAsLandlord(propertyId: string, landlordId: number) {
+  await assertPropertyOwner(propertyId, landlordId);
+  return deleteProperty(propertyId);
+}
+
 export async function searchProperties(body: {
   query?: string;
   filters?: PropertyFilters;
@@ -294,5 +335,6 @@ export async function searchProperties(body: {
   if (body.query) {
     filters.location = body.query;
   }
+  filters.publicBrowse = true;
   return getProperties(filters);
 }

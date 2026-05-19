@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // LeaseSpaces chats: persisted by Express via Firebase Admin SDK.
+    // Mobile/web should use REST under /api/chats, or add read rules that
+    // check request.auth and participantIds when enabling client listeners.
+    match /conversations/{conversationId} {
+      allow read, write: if false;
+
+      match /messages/{messageId} {
+        allow read, write: if false;
+      }
+    }
+  }
+}

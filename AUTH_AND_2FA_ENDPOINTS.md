@@ -163,17 +163,23 @@ After this, all future admin logins will return `requires2fa: true` and `tempora
 
 ---
 
-## OTP Email (SMTP env setup)
+## OTP Email (SMTP Configuration)
 
-OTP email delivery uses `.env` SMTP credentials.
+OTP email delivery uses SMTP settings configured via the admin dashboard API.
 
-Required:
+**To configure SMTP:**
+1. Use `POST /api/admin/settings/smtp` to set SMTP configuration
+2. Or configure via the admin dashboard interface
+3. Test connection with `POST /api/admin/settings/smtp/test`
 
-- `EMAIL_USER`
-- `EMAIL_PASS` (Gmail App Password recommended)
-- `EMAIL_SENDER`
-- `SMTP_SERVER`
-- `SMTP_PORT`
-- `EMAIL_USE_SSL`
-- `EMAIL_USE_STARTTLS`
-- `EMAIL_TIMEOUT`
+**Required SMTP fields:**
+- `host` (e.g., smtp.gmail.com)
+- `port` (e.g., 465 for SSL, 587 for STARTTLS)
+- `username` (your email address)
+- `password` (app password for Gmail)
+- `useSsl` (true for SSL connections)
+- `useStartTls` (true for STARTTLS connections)
+- `timeout` (connection timeout in ms)
+- `fromEmail` (sender email address)
+- `fromName` (sender display name)
+- `isActive` (must be true to send emails)

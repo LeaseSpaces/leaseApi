@@ -9,7 +9,9 @@
     { "key": "firebaseIdToken", "value": "" },
     { "key": "backendToken", "value": "" },
     { "key": "otpEmail", "value": "tenant@example.com" },
-    { "key": "otpCode", "value": "" }
+    { "key": "otpCode", "value": "" },
+    { "key": "propertyId", "value": "" },
+    { "key": "conversationId", "value": "" }
   ],
   "item": [
     {
@@ -219,6 +221,308 @@
               { "key": "Authorization", "value": "Bearer {{backendToken}}" }
             ],
             "url": "{{baseUrl}}/api/admin/admin-profile"
+          }
+        },
+        {
+          "name": "GET /api/admin/settings/about",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/api/admin/settings/about",
+            "description": "Get About page content for admin settings."
+          }
+        },
+        {
+          "name": "POST /api/admin/settings/about",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"About page content goes here.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/settings/about",
+            "description": "Save About page content."
+          }
+        },
+        {
+          "name": "PUT /api/admin/settings/about",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Updated About page content.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/settings/about",
+            "description": "Update About page content."
+          }
+        },
+        {
+          "name": "DELETE /api/admin/settings/about",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/settings/about",
+            "description": "Delete About page content."
+          }
+        },
+        {
+          "name": "GET /api/admin/settings/privacy-policy",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/api/admin/settings/privacy-policy",
+            "description": "Get Privacy Policy content for admin settings."
+          }
+        },
+        {
+          "name": "POST /api/admin/settings/privacy-policy",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Privacy policy content goes here.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/settings/privacy-policy",
+            "description": "Save Privacy Policy content."
+          }
+        },
+        {
+          "name": "PUT /api/admin/settings/privacy-policy",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Updated Privacy Policy content.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/settings/privacy-policy",
+            "description": "Update Privacy Policy content."
+          }
+        },
+        {
+          "name": "DELETE /api/admin/settings/privacy-policy",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/settings/privacy-policy",
+            "description": "Delete Privacy Policy content."
+          }
+        },
+        {
+          "name": "GET /api/admin/settings/terms-and-conditions",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/api/admin/settings/terms-and-conditions",
+            "description": "Get Terms & Conditions content for admin settings."
+          }
+        },
+        {
+          "name": "POST /api/admin/settings/terms-and-conditions",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Terms & Conditions content goes here.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/settings/terms-and-conditions",
+            "description": "Save Terms & Conditions content."
+          }
+        },
+        {
+          "name": "PUT /api/admin/settings/terms-and-conditions",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Updated Terms & Conditions content.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/settings/terms-and-conditions",
+            "description": "Update Terms & Conditions content."
+          }
+        },
+        {
+          "name": "DELETE /api/admin/settings/terms-and-conditions",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/settings/terms-and-conditions",
+            "description": "Delete Terms & Conditions content."
+          }
+        },
+        {
+          "name": "POST /api/admin/users/admins",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John\",\n  \"surname\": \"Doe\",\n  \"email\": \"admin@example.com\",\n  \"password\": \"securepassword123\",\n  \"isSuperAdmin\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/users/admins",
+            "description": "Create admin user. Requires super admin."
+          }
+        },
+        {
+          "name": "POST /api/admin/users/:userId/2fa/init",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/users/123/2fa/init",
+            "description": "Super admin: generate secret + qrCodeBase64 for user."
+          }
+        },
+        {
+          "name": "POST /api/admin/users/:userId/2fa/enable",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"secret\": \"JBSWY3DPEHPK3PXP\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/users/123/2fa/enable",
+            "description": "Super admin: enable 2FA after OTP. Body: secret from init + 6-digit otp."
+          }
+        },
+        {
+          "name": "POST /api/admin/users/:userId/2fa/disable",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/users/123/2fa/disable",
+            "description": "Disable 2FA for a user. Replace :userId with actual user ID."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "POST /api/properties/:propertyId/chats (tenant)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{backendToken}}" }],
+            "url": "{{baseUrl}}/api/properties/{{propertyId}}/chats",
+            "description": "Message landlord. Set propertyId from GET /api/properties. Copy conversation.id to conversationId."
+          }
+        },
+        {
+          "name": "GET /api/chats (inbox)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{backendToken}}" }],
+            "url": "{{baseUrl}}/api/chats?limit=20",
+            "description": "List conversations for current user."
+          }
+        },
+        {
+          "name": "GET /api/chats/:conversationId/history",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{backendToken}}" }],
+            "url": "{{baseUrl}}/api/chats/{{conversationId}}/history?limit=50&order=asc",
+            "description": "Chat history with sentAt/createdAt timestamps."
+          }
+        },
+        {
+          "name": "POST /api/chats/:conversationId/messages",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{backendToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Hello from Postman\"\n}"
+            },
+            "url": "{{baseUrl}}/api/chats/{{conversationId}}/messages",
+            "description": "Send a chat message."
+          }
+        },
+        {
+          "name": "POST /api/chats/:conversationId/read",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{backendToken}}" }],
+            "url": "{{baseUrl}}/api/chats/{{conversationId}}/read",
+            "description": "Mark messages from other party as read."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Support (public)",
+      "item": [
+        {
+          "name": "GET /api/support/form",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/support/form",
+            "description": "Categories for Create support ticket UI. No auth."
+          }
+        },
+        {
+          "name": "POST /api/support/tickets",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"Account & Login\",\n  \"description\": \"I cannot reset my password after multiple attempts.\",\n  \"customerEmail\": \"support-test@example.com\",\n  \"confirmEmail\": \"support-test@example.com\",\n  \"customerName\": \"Test User\"\n}"
+            },
+            "url": "{{baseUrl}}/api/support/tickets",
+            "description": "Create public support ticket. Confirmation email is sent to customerEmail (the submitter), not to support staff. Returns ticketNumber, emailSent, confirmationEmailSentTo."
           }
         }
       ]

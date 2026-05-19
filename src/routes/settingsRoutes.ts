@@ -1,34 +1,66 @@
 /* eslint-disable */
 
-import express from 'express';
+import express from "express";
 import {
-    getAppSettingsController,
-    saveAppSettingsController,
-    updateAppSettingsController,
-    getSMTPConfigController,
-    saveSMTPConfigController,
-    updateSMTPConfigController,
-    testSMTPConnectionController,
-    uploadMiddleware,
-    uploadFileController
-} from '../controllers/settingsController';
+  getAppSettingsController,
+  saveAppSettingsController,
+  updateAppSettingsController,
+  getAboutController,
+  saveAboutController,
+  updateAboutController,
+  deleteAboutController,
+  getPrivacyPolicyController,
+  savePrivacyPolicyController,
+  updatePrivacyPolicyController,
+  deletePrivacyPolicyController,
+  getTermsController,
+  saveTermsController,
+  updateTermsController,
+  deleteTermsController,
+  getSMTPConfigController,
+  saveSMTPConfigController,
+  updateSMTPConfigController,
+  testSMTPConnectionController,
+  uploadMiddleware,
+  uploadFileController,
+} from "../controllers/settingsController";
 
-const settingsRouter = express.Router();
+/** Public read-only (mobile app branding / legal pages). */
+const settingsPublicRouter = express.Router();
+settingsPublicRouter.get("/app", getAppSettingsController);
+settingsPublicRouter.get("/about", getAboutController);
+settingsPublicRouter.get("/privacy-policy", getPrivacyPolicyController);
+settingsPublicRouter.get("/terms-and-conditions", getTermsController);
 
-// Application Settings
-settingsRouter.get('/app', getAppSettingsController);
-settingsRouter.post('/app', saveAppSettingsController);
-settingsRouter.put('/app', updateAppSettingsController);
+/** Full CRUD — mount under /api/admin/settings with appAuth + requireAdmin. */
+const settingsAdminRouter = express.Router();
+settingsAdminRouter.get("/app", getAppSettingsController);
+settingsAdminRouter.post("/app", saveAppSettingsController);
+settingsAdminRouter.put("/app", updateAppSettingsController);
 
-// SMTP
-settingsRouter.get('/smtp', getSMTPConfigController);
-settingsRouter.post('/smtp', saveSMTPConfigController);
-settingsRouter.put('/smtp', updateSMTPConfigController);
-settingsRouter.post('/smtp/test', testSMTPConnectionController);
+settingsAdminRouter.get("/about", getAboutController);
+settingsAdminRouter.post("/about", saveAboutController);
+settingsAdminRouter.put("/about", updateAboutController);
+settingsAdminRouter.delete("/about", deleteAboutController);
 
-// Upload
-settingsRouter.post('/upload', uploadMiddleware, uploadFileController);
+settingsAdminRouter.get("/privacy-policy", getPrivacyPolicyController);
+settingsAdminRouter.post("/privacy-policy", savePrivacyPolicyController);
+settingsAdminRouter.put("/privacy-policy", updatePrivacyPolicyController);
+settingsAdminRouter.delete("/privacy-policy", deletePrivacyPolicyController);
 
-export { settingsRouter };
+settingsAdminRouter.get("/terms-and-conditions", getTermsController);
+settingsAdminRouter.post("/terms-and-conditions", saveTermsController);
+settingsAdminRouter.put("/terms-and-conditions", updateTermsController);
+settingsAdminRouter.delete("/terms-and-conditions", deleteTermsController);
 
+settingsAdminRouter.get("/smtp", getSMTPConfigController);
+settingsAdminRouter.post("/smtp", saveSMTPConfigController);
+settingsAdminRouter.put("/smtp", updateSMTPConfigController);
+settingsAdminRouter.post("/smtp/test", testSMTPConnectionController);
 
+settingsAdminRouter.post("/upload", uploadMiddleware, uploadFileController);
+
+/** @deprecated Use settingsPublicRouter or settingsAdminRouter */
+const settingsRouter = settingsAdminRouter;
+
+export { settingsPublicRouter, settingsAdminRouter, settingsRouter };

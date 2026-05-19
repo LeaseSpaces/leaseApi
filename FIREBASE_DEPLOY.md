@@ -1,5 +1,48 @@
 # Deploying LeaseSpaces Backend to Firebase Functions
 
+## Firebase: emulator vs real project
+
+| Mode | Where | Firestore | Credentials |
+|------|--------|-----------|-------------|
+| **Production** | `firebase deploy --only functions` | Real Firestore in `easespaces-7d30b` | Automatic (Cloud Run / Functions ADC) |
+| **Local → real Firebase** | `npm run dev` on your PC | Real Firestore | `GOOGLE_APPLICATION_CREDENTIALS` → service account JSON |
+| **Local → emulator** | `npm run dev` + emulator | Local only | `USE_FIRESTORE_EMULATOR=true` (no JSON required for chat) |
+
+### Local dev against **real** Firebase (recommended before deploy)
+
+PowerShell (current session):
+
+```powershell
+$env:GOOGLE_APPLICATION_CREDENTIALS="C:\path\to\easespaces-service-account.json"
+Remove-Item Env:USE_FIRESTORE_EMULATOR -ErrorAction SilentlyContinue
+Remove-Item Env:FIRESTORE_EMULATOR_HOST -ErrorAction SilentlyContinue
+npm run dev
+```
+
+On startup you should see: `[firebase-admin] Real Firebase (project: easespaces-7d30b, credentials: service account file)`.
+
+Also deploy Firestore rules (chat security) once per project:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+### Local dev with **Firestore emulator** (chat tests only)
+
+Terminal 1: `npm run emulator:firestore`  
+Terminal 2:
+
+```powershell
+$env:USE_FIRESTORE_EMULATOR="true"
+$env:FIRESTORE_EMULATOR_HOST="127.0.0.1:8085"
+Remove-Item Env:GOOGLE_APPLICATION_CREDENTIALS -ErrorAction SilentlyContinue
+npm run dev
+```
+
+Startup log: `[firebase-admin] Firestore EMULATOR at 127.0.0.1:8085`.
+
+---
+
 ## Prerequisites
 
 - Firebase CLI: `npm install -g firebase-tools`
@@ -15,18 +58,37 @@ Set these in **Firebase Console** → **Functions** → **api** (or your functio
 | `DATABASE_URL` | Neon Postgres connection string (use the **pooled** URL ending in `-pooler`) |
 | `JWT_SECRET` | Your JWT signing secret (32+ chars) |
 
-Optional (for Firebase Admin / app config):
+Also set in Firebase Console (or `.env` locally):
 
-- `API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `STORAGE_BUCKET`, `MESSAGING_SENDER_ID`, `APP_ID`
+- `PROJECT_ID` = `easespaces-7d30b` (must match Firestore rules project)
+- `API_KEY`, `AUTH_DOMAIN`, `STORAGE_BUCKET`, `MESSAGING_SENDER_ID`, `APP_ID`
 
-Firebase Admin SDK auto-initializes with default credentials when running on Firebase.
+**Do not** set `USE_FIRESTORE_EMULATOR` or `FIRESTORE_EMULATOR_HOST` on Cloud Functions.
+
+Firebase Admin uses **application default credentials** in production — you do **not** upload `GOOGLE_APPLICATION_CREDENTIALS` to Functions.
+
+**Support emails:** configure SMTP in admin (`POST /api/admin/settings/smtp`) or set `EMAIL_USER` / `EMAIL_PASS` env vars on the function.
 
 ## Deploy
 
 ```bash
 cd c:\Users\Programm3r\Desktop\backend
 npm install
-firebase deploy --only functions
+npm run build
+firebase deploy --only functions,firestore:rules
+```
+
+### After deploy — smoke tests
+
+```bash
+# Public support (no auth)
+curl https://api-jfh4l76lzq-bq.a.run.app/api/support/form
+
+# Chat messages (needs deploy + JWT_SECRET match)
+npm run test:chat:prod
+
+# SMTP from Neon DB
+npm run test:smtp
 ```
 
 ## Post-Deploy URL

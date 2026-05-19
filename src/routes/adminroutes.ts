@@ -13,7 +13,8 @@ import {
   adminModerateProperty,
   adminUpdateAvailability,
 } from "../controllers/adminPropertyController";
-import { createAdminUser, createSupportAgent } from "../controllers/adminUserManagementController";
+import { createAdminUser, createSupportAgent, enableUserTwoFA, disableUserTwoFA } from "../controllers/adminUserManagementController";
+import * as locationsController from "../controllers/locationsController";
 import {
   adminLogin,
   adminLoginPrisma,
@@ -25,22 +26,23 @@ import {
   init2faPrisma,
   verifyTwoFA,
 } from "../controllers/authcontroller";
-import { firebaseAuth, backendAuth, appAuth } from "../middleware/auth.middleware";
+import { backendAuth, appAuth } from "../middleware/auth.middleware";
 import { requireAdmin, requireSuperAdmin } from "../middleware/role.middleware";
 import { requireOtp } from "../middleware/otp.middleware";
-import { settingsRouter } from "./settingsRoutes";
+import { settingsAdminRouter } from "./settingsRoutes";
+import * as adminApplicationController from "../controllers/adminApplicationController";
 
 const adminRouter = express.Router();
 
 // LeaseSpaces: Protected admin routes (Firebase JWT + Prisma appRole admin)
-adminRouter.get("/dashboard", firebaseAuth({ syncUser: true }), requireAdmin, getDashboard);
-adminRouter.get("/properties/analytics", firebaseAuth({ syncUser: true }), requireAdmin, getPropertyAnalytics);
+// appAuth accepts backend JWT from POST /api/admin/login OR Firebase ID token
+adminRouter.get("/dashboard", appAuth({ syncUser: true }), requireAdmin, getDashboard);
+adminRouter.get("/properties/analytics", appAuth({ syncUser: true }), requireAdmin, getPropertyAnalytics);
 
 // High-security: require OTP (body: { otp }) in addition to auth + admin
-adminRouter.delete("/delete-admin", firebaseAuth({ syncUser: true }), requireAdmin, requireOtp, deleteAdmin);
+adminRouter.delete("/delete-admin", appAuth({ syncUser: true }), requireAdmin, requireOtp, deleteAdmin);
 
-// Admin profile (protected)
-adminRouter.get("/admin-profile", firebaseAuth({ syncUser: true }), requireAdmin, getAdminProfile);
+adminRouter.get("/admin-profile", appAuth({ syncUser: true }), requireAdmin, getAdminProfile);
 
 // LeaseSpaces: Admin login — username (email) + password only; no Google signup
 adminRouter.post("/login", adminLoginPrisma);
@@ -52,9 +54,38 @@ adminRouter.get("/properties/:propertyId", appAuth({ syncUser: true }), requireA
 adminRouter.patch("/properties/:propertyId/moderation", appAuth({ syncUser: true }), requireAdmin, adminModerateProperty);
 adminRouter.patch("/properties/:propertyId/availability", appAuth({ syncUser: true }), requireAdmin, adminUpdateAvailability);
 
+// Rental applications — review, approve, reject
+adminRouter.get("/applications", appAuth({ syncUser: true }), requireAdmin, adminApplicationController.listApplications);
+adminRouter.get(
+  "/applications/:applicationId",
+  appAuth({ syncUser: true }),
+  requireAdmin,
+  adminApplicationController.getApplication
+);
+adminRouter.patch(
+  "/applications/:applicationId/decision",
+  appAuth({ syncUser: true }),
+  requireAdmin,
+  adminApplicationController.decideApplication
+);
+adminRouter.patch(
+  "/applications/:applicationId/documents-verification",
+  appAuth({ syncUser: true }),
+  requireAdmin,
+  adminApplicationController.updateDocumentsVerification
+);
+
 // Super admin only: create admin users and support agents
 adminRouter.post("/users/admins", appAuth({ syncUser: true }), requireAdmin, requireSuperAdmin, createAdminUser);
 adminRouter.post("/support/agents", appAuth({ syncUser: true }), requireAdmin, requireSuperAdmin, createSupportAgent);
+
+// Admin location management
+adminRouter.get("/locations", appAuth({ syncUser: true }), requireAdmin, locationsController.getAdminLocations);
+adminRouter.put("/locations/:locationId", appAuth({ syncUser: true }), requireAdmin, locationsController.updateLocation);
+
+// Admin 2FA management for users
+adminRouter.post("/users/:userId/2fa/enable", appAuth({ syncUser: true }), requireAdmin, enableUserTwoFA);
+adminRouter.post("/users/:userId/2fa/disable", appAuth({ syncUser: true }), requireAdmin, disableUserTwoFA);
 
 // LeaseSpaces: Admin 2FA (Prisma) — use backend JWT from POST /api/admin/login
 adminRouter.post("/2fa/init", backendAuth, requireAdmin, init2faPrisma);
@@ -68,7 +99,7 @@ adminRouter.post("/verify-otp", verifyTwoFA);
 adminRouter.get("/all", getAllAdmins);
 adminRouter.post("/forgot-password", forgotPassword);
 
-// Settings routes
-adminRouter.use("/settings", settingsRouter);
+// Admin settings — requires Bearer token from POST /api/admin/login (or Firebase ID token)
+adminRouter.use("/settings", appAuth({ syncUser: true }), requireAdmin, settingsAdminRouter);
 
 export { adminRouter };

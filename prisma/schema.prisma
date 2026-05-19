@@ -40,6 +40,13 @@ model User {
   // LeaseSpaces relations
   properties      Property[]
   applications    Application[]
+  tenantLeases          Lease[]              @relation("TenantLeases")
+  landlordLeases        Lease[]              @relation("LandlordLeases")
+  tenantMaintenance     MaintenanceRequest[] @relation("TenantMaintenance")
+  landlordMaintenance   MaintenanceRequest[] @relation("LandlordMaintenance")
+  tenantConversations   Conversation[] @relation("TenantConversations")
+  landlordConversations Conversation[] @relation("LandlordConversations")
+  sentChatMessages      ChatMessage[]  @relation("SentChatMessages")
 }
 
 enum UserRole {
@@ -154,6 +161,9 @@ model Property {
 
   landlord       User          @relation(fields: [landlordId], references: [id])
   applications  Application[]
+  conversations Conversation[]
+  leases         Lease[]
+  maintenanceRequests MaintenanceRequest[]
 
   @@index([landlordId])
   @@index([status])
@@ -178,18 +188,30 @@ enum PropertyAvailabilityStatus {
 
 // LeaseSpaces: Tenant applications for properties
 model Application {
-  id          String          @id @default(uuid())
-  propertyId  String
-  tenantId    Int
-  status      ApplicationStatus @default(pending)
-  moveInDate  DateTime?
-  message     String?
-  documents   Json?            // [{ type, url, uploadedAt }]
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id                String            @id @default(uuid())
+  propertyId        String
+  tenantId          Int
+  status            ApplicationStatus @default(draft)
+  moveInDate        DateTime?
+  annualIncome      Int?
+  currentEmployment String?
+  references        Json?             // [{ name, contact }]
+  message           String?
+  documents         Json?             // [{ type, fileName, url, mimeType, uploadedAt, verificationStatus? }]
+  documentsVerificationStatus DocumentsVerificationStatus @default(pending)
+  documentsVerifiedAt         DateTime?
+  documentsVerificationNotes  String?
+  termsAcceptedAt   DateTime?
+  reviewNotes       String?
+  reviewedAt        DateTime?
+  reviewedById      Int?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   property    Property        @relation(fields: [propertyId], references: [id])
   tenant      User            @relation(fields: [tenantId], references: [id])
+  conversation Conversation?
+  lease       Lease?
 
   @@index([propertyId])
   @@index([tenantId])
@@ -197,10 +219,134 @@ model Application {
 }
 
 enum ApplicationStatus {
+  draft
   pending
   approved
   rejected
   withdrawn
+}
+
+enum DocumentsVerificationStatus {
+  pending
+  in_review
+  verified
+  partial
+  rejected
+}
+
+enum LeaseStatus {
+  active
+  ended
+  cancelled
+}
+
+enum MaintenanceStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum MaintenancePriority {
+  low
+  medium
+  high
+  urgent
+}
+
+model Lease {
+  id              String      @id @default(uuid())
+  propertyId      String
+  tenantId        Int
+  landlordId      Int
+  applicationId   String?     @unique
+  status          LeaseStatus @default(active)
+  startDate       DateTime
+  endDate         DateTime?
+  monthlyRent     Int
+  currency        String      @default("ZAR")
+  agreementUrl    String?
+  agreementNotes  String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  property        Property    @relation(fields: [propertyId], references: [id])
+  tenant          User        @relation("TenantLeases", fields: [tenantId], references: [id])
+  landlord        User        @relation("LandlordLeases", fields: [landlordId], references: [id])
+  application     Application? @relation(fields: [applicationId], references: [id])
+  maintenanceRequests MaintenanceRequest[]
+
+  @@index([propertyId])
+  @@index([tenantId])
+  @@index([landlordId])
+  @@index([status])
+}
+
+model MaintenanceRequest {
+  id          String              @id @default(uuid())
+  propertyId  String
+  tenantId    Int
+  landlordId  Int
+  leaseId     String?
+  title       String
+  description String
+  status      MaintenanceStatus   @default(open)
+  priority    MaintenancePriority @default(medium)
+  images      String[]            @default([])
+  resolvedAt  DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  property    Property @relation(fields: [propertyId], references: [id])
+  tenant      User     @relation("TenantMaintenance", fields: [tenantId], references: [id])
+  landlord    User     @relation("LandlordMaintenance", fields: [landlordId], references: [id])
+  lease       Lease?   @relation(fields: [leaseId], references: [id])
+
+  @@index([propertyId])
+  @@index([tenantId])
+  @@index([landlordId])
+  @@index([status])
+}
+
+model Conversation {
+  id            String        @id @default(uuid())
+  propertyId    String
+  applicationId String?       @unique
+  tenantId      Int
+  landlordId    Int
+  lastMessageAt DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  property      Property      @relation(fields: [propertyId], references: [id])
+  application   Application?  @relation(fields: [applicationId], references: [id])
+  tenant        User          @relation("TenantConversations", fields: [tenantId], references: [id])
+  landlord      User          @relation("LandlordConversations", fields: [landlordId], references: [id])
+  messages      ChatMessage[]
+
+  @@unique([propertyId, tenantId])
+  @@index([landlordId])
+  @@index([tenantId])
+  @@index([propertyId])
+  @@index([lastMessageAt])
+}
+
+model ChatMessage {
+  id             String       @id @default(uuid())
+  conversationId String
+  senderId       Int
+  body           String
+  attachments    Json?
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("SentChatMessages", fields: [senderId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@index([readAt])
 }
 
 model Ticket {
@@ -336,7 +482,9 @@ model Settings {
   smtpPort           Int
   smtpUsername       String
   smtpPassword       String
-  smtpEncryption     SmtpEncryption
+  smtpUseSsl         Boolean        @default(false)
+  smtpUseStartTls    Boolean        @default(false)
+  smtpTimeout        Int            @default(20000)
   smtpFromEmail      String
   smtpFromName       String
   smtpIsActive       Boolean        @default(false)

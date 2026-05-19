@@ -141,3 +141,133 @@ export const createSupportAgent = async (req: Request, res: Response): Promise<v
   }
 };
 
+export const enableUserTwoFA = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = Number(req.params?.userId);
+    if (!userId || Number.isNaN(userId)) {
+      res.status(400).json({
+        success: false,
+        error: { code: "INVALID_USER_ID", message: "Valid user ID is required" },
+      });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, twofa_enabled: true, twofa_secret: true },
+    });
+
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        error: { code: "USER_NOT_FOUND", message: "User not found" },
+      });
+      return;
+    }
+
+    if (user.twofa_enabled) {
+      res.status(400).json({
+        success: false,
+        error: { code: "2FA_ALREADY_ENABLED", message: "2FA is already enabled for this user" },
+      });
+      return;
+    }
+
+    // Generate new secret if not exists
+    let secret = user.twofa_secret;
+    if (!secret) {
+      const { TwoFAService } = await import("../services/twofa");
+      const { secret: newSecret } = await TwoFAService.generateKeyAndQrCode(user.email);
+      secret = newSecret;
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        twofa_enabled: true,
+        twofa_secret: secret,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "2FA enabled for user",
+      user: {
+        id: user.id,
+        email: user.email,
+        twofa_enabled: true,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to enable 2FA for user",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
+  }
+};
+
+export const disableUserTwoFA = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = Number(req.params?.userId);
+    if (!userId || Number.isNaN(userId)) {
+      res.status(400).json({
+        success: false,
+        error: { code: "INVALID_USER_ID", message: "Valid user ID is required" },
+      });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, twofa_enabled: true },
+    });
+
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        error: { code: "USER_NOT_FOUND", message: "User not found" },
+      });
+      return;
+    }
+
+    if (!user.twofa_enabled) {
+      res.status(400).json({
+        success: false,
+        error: { code: "2FA_ALREADY_DISABLED", message: "2FA is already disabled for this user" },
+      });
+      return;
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        twofa_enabled: false,
+        twofa_secret: null,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "2FA disabled for user",
+      user: {
+        id: user.id,
+        email: user.email,
+        twofa_enabled: false,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to disable 2FA for user",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
+  }
+};
+

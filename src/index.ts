@@ -3,11 +3,16 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { app } from "./app";
 
-/** Firebase Functions: HTTP API handler. Deploy with: firebase deploy --only functions */
-export const api = onRequest(
-  { region: "africa-south1", memory: "512MiB" },
-  app as any
-);
+const functionOptions = {
+  region: "africa-south1" as const,
+  memory: "512MiB" as const,
+};
+
+/** Legacy v2 function URL (keep for existing clients). */
+export const api = onRequest(functionOptions, app as any);
+
+/** API v3 — same Express app; use this base URL for new frontends after deploy. */
+export const api3 = onRequest(functionOptions, app as any);
 
 /** Local dev: run `npm run dev` or `npm start` to listen on a port.
  * Uses `process.env.PORT` if provided; otherwise defaults to 8080.

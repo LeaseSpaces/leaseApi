@@ -33,15 +33,17 @@ This is the new flow you requested: user enters email -> receives OTP -> verifie
 
 1. Start API:
    - `npm run dev`
-2. Confirm SMTP env is set in `.env`:
-   - `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_SENDER`
-   - `SMTP_SERVER`, `SMTP_PORT`
-   - `EMAIL_USE_SSL`, `EMAIL_USE_STARTTLS`
-   - `EMAIL_TIMEOUT`
+2. Configure SMTP settings via admin API:
+   - Use `POST {{baseUrl}}/api/admin/settings/smtp` to set SMTP configuration
+   - Or use the admin dashboard to configure SMTP settings
 3. Import collection: `LeaseSpaces_Auth_Collection.postman_collection.json`
 4. In Postman variables set:
    - `baseUrl = http://localhost:8080`
    - `otpEmail = your-test-email@example.com`
+
+> Note: The Postman collection includes admin settings routes, user 2FA (`/2fa/init`, `/2fa/enable` with `{ secret, otp }`, `/2fa/disable`), and a **Chat** folder (`/api/chats`, property chats, history, send message). Set variables `propertyId` and `conversationId` after the first chat request.
+
+**Automated chat test (terminal):** with Firestore emulator running, `npm run test:chat`.
 
 ### Step A: Request OTP
 
