@@ -69,11 +69,46 @@ Firebase Admin uses **application default credentials** in production — you do
 
 **Support emails:** configure SMTP in admin (`POST /api/admin/settings/smtp`) or set `EMAIL_USER` / `EMAIL_PASS` env vars on the function.
 
+## Database migrations (required before / after code deploy)
+
+The API code on `kgabo` expects columns such as `Application.documentsVerificationStatus`. If you deploy functions **without** running migrations, the app will show Prisma errors like:
+
+> The column `Application.documentsVerificationStatus` does not exist in the current database.
+
+**Run against the same Neon database as production** (`DATABASE_URL` in `.env` or Neon console):
+
+```bash
+cd c:\Users\Programm3r\Desktop\backend
+# Ensure DATABASE_URL points at production Neon (pooled URL is fine)
+npx prisma migrate status    # see pending migrations
+npm run prisma:migrate:deploy   # applies all pending SQL migrations
+```
+
+Pending migrations from the May 2026 release (apply in order via `migrate deploy`):
+
+| Migration | Adds |
+|-----------|------|
+| `20260505183523_update_smtp_fields` | SMTP settings columns |
+| `20260511193000_add_realtime_chat` | `Conversation`, `ChatMessage` |
+| `20260515160000_application_rental_fields` | Application draft fields, `annualIncome`, etc. |
+| `20260515170000_application_review_fields` | `reviewNotes`, `reviewedAt`, `reviewedById` |
+| `20260516140000_landlord_lease_maintenance` | **`documentsVerificationStatus`**, `Lease`, `MaintenanceRequest` |
+| `20260519120000_add_property_favorites` | **`PropertyFavorite`** (tenant heart / saved listings) |
+| `20260519140000_add_user_profile_phone` | **`User.phone`** (profile settings) |
+| `20260519150000_add_user_avatar_url` | **`User.avatarUrl`** (profile image) |
+
+**Order:** Always run **`prisma migrate deploy` before or immediately after** `firebase deploy` when the branch includes new `prisma/migrations/*` folders.
+
+Neon SQL editor fallback (only if `migrate deploy` cannot run): execute the SQL in `prisma/migrations/20260516140000_landlord_lease_maintenance/migration.sql` (and any earlier pending files) manually.
+
+---
+
 ## Deploy
 
 ```bash
 cd c:\Users\Programm3r\Desktop\backend
 npm install
+npm run prisma:migrate:deploy   # do not skip
 npm run build
 firebase deploy --only functions,firestore:rules
 ```

@@ -29,6 +29,7 @@ import {
   isOnboardingRequired,
   normalizeEmail,
 } from "../services/otpAuthService";
+import { buildPostLoginResponse, buildTokenAfter2fa } from "../services/authLoginService";
 
 const db = getFirestore(firebase);
 
@@ -79,42 +80,7 @@ export const adminLoginPrisma = async (req: Request, res: Response): Promise<any
       });
     }
 
-    if (user.twofa_enabled) {
-      const temporaryToken = generateTempToken(String(user.id));
-      return res.status(200).json({
-        success: true,
-        requires2fa: true,
-        temporaryToken,
-        user: {
-          id: user.id,
-          uid: user.socialUserId,
-          email: user.email,
-          name: user.name,
-          surname: user.surname,
-          role: user.appRole ?? "tenant",
-          twofa_enabled: user.twofa_enabled,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        },
-      });
-    }
-
-    const token = generateAdminToken(String(user.id));
-    return res.status(200).json({
-      success: true,
-      user: {
-        id: user.id,
-        uid: user.socialUserId,
-        email: user.email,
-        name: user.name,
-        surname: user.surname,
-        role: user.appRole ?? "tenant",
-        twofa_enabled: user.twofa_enabled,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      },
-      token,
-    });
+    return res.status(200).json(buildPostLoginResponse(user));
   } catch (error) {
     console.error("adminLoginPrisma error:", error);
     return res.status(500).json({
@@ -831,46 +797,7 @@ export const syncAuth = async (req: Request, res: Response): Promise<any> => {
       });
     }
 
-    const isAdmin = user.appRole === "admin";
-
-    // Admin with 2FA: return temporary token; full token after OTP verification
-    if (isAdmin && user.twofa_enabled) {
-      const temporaryToken = generateTempToken(String(user.id));
-      return res.status(200).json({
-        success: true,
-        requires2fa: true,
-        temporaryToken,
-        user: {
-          id: user.id,
-          uid: user.socialUserId,
-          email: user.email,
-          name: user.name,
-          surname: user.surname,
-          role: user.appRole ?? "tenant",
-          twofa_enabled: user.twofa_enabled,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        },
-      });
-    }
-
-    const token = isAdmin ? generateAdminToken(String(user.id)) : generateToken(String(user.id));
-
-    return res.status(200).json({
-      success: true,
-      user: {
-        id: user.id,
-        uid: user.socialUserId,
-        email: user.email,
-        name: user.name,
-        surname: user.surname,
-        role: user.appRole ?? "tenant",
-        twofa_enabled: user.twofa_enabled,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      },
-      token,
-    });
+    return res.status(200).json(buildPostLoginResponse(user));
   } catch (error) {
     console.error("syncAuth error:", error);
     return res.status(401).json({
@@ -884,7 +811,7 @@ export const syncAuth = async (req: Request, res: Response): Promise<any> => {
   }
 };
 
-/** POST /api/auth/2fa/verify-login — body: { temporaryToken, otp }. Returns full admin token. */
+/** POST /api/auth/2fa/verify-login — body: { temporaryToken, otp }. Returns full JWT (admin, tenant, landlord). */
 export const verifyLogin2fa = async (req: Request, res: Response): Promise<any> => {
   try {
     const { temporaryToken, otp } = req.body;
@@ -896,7 +823,7 @@ export const verifyLogin2fa = async (req: Request, res: Response): Promise<any> 
     }
     const { userId } = verifyTempToken(temporaryToken);
     const user = await prisma.user.findUnique({ where: { id: Number(userId) } });
-    if (!user || user.appRole !== "admin") {
+    if (!user || !user.twofa_enabled) {
       return res.status(401).json({
         success: false,
         error: { code: "UNAUTHORIZED", message: "Invalid or expired temporary token" },
@@ -915,20 +842,7 @@ export const verifyLogin2fa = async (req: Request, res: Response): Promise<any> 
         error: { code: "INVALID_OTP", message: "Invalid or expired OTP" },
       });
     }
-    const token = generateAdminToken(String(user.id));
-    return res.status(200).json({
-      success: true,
-      user: {
-        id: user.id,
-        uid: user.socialUserId,
-        email: user.email,
-        name: user.name,
-        surname: user.surname,
-        role: user.appRole ?? "tenant",
-        twofa_enabled: user.twofa_enabled,
-      },
-      token,
-    });
+    return res.status(200).json(buildTokenAfter2fa(user));
   } catch (error) {
     console.error("verifyLogin2fa error:", error);
     return res.status(401).json({
@@ -1190,25 +1104,12 @@ export const verifyEmailOtp = async (req: Request, res: Response): Promise<any> 
     });
 
     const needsOnboarding = isOnboardingRequired(user);
-    const role = user.appRole ?? "onboarding";
-    const token = generateTokenWithPayload({
-      userId: String(user.id),
-      user_id: user.id,
-      role,
-    });
-
-    return res.status(200).json({
-      success: true,
-      token,
-      onboardingRequired: needsOnboarding,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        surname: user.surname,
-        role: user.appRole,
-      },
-    });
+    return res.status(200).json(
+      buildPostLoginResponse(user, {
+        usePayloadToken: true,
+        onboardingRequired: needsOnboarding,
+      })
+    );
   } catch (error) {
     console.error("verifyEmailOtp error:", error);
     return res.status(500).json({

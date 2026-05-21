@@ -13,6 +13,8 @@ model User {
   name            String
   surname         String
   email           String           @unique
+  phone           String?
+  avatarUrl       String?
   password        String?
   createdAt       DateTime?        @default(now())
   updatedAt       DateTime?        @updatedAt
@@ -47,6 +49,7 @@ model User {
   tenantConversations   Conversation[] @relation("TenantConversations")
   landlordConversations Conversation[] @relation("LandlordConversations")
   sentChatMessages      ChatMessage[]  @relation("SentChatMessages")
+  propertyFavorites     PropertyFavorite[]
 }
 
 enum UserRole {
@@ -164,6 +167,7 @@ model Property {
   conversations Conversation[]
   leases         Lease[]
   maintenanceRequests MaintenanceRequest[]
+  favorites      PropertyFavorite[]
 
   @@index([landlordId])
   @@index([status])
@@ -184,6 +188,21 @@ enum PropertyAvailabilityStatus {
   available
   unavailable
   occupied
+}
+
+// Tenant saved listings (heart / favourites)
+model PropertyFavorite {
+  id         String   @id @default(uuid())
+  userId     Int
+  propertyId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+  @@index([userId])
+  @@index([propertyId])
 }
 
 // LeaseSpaces: Tenant applications for properties

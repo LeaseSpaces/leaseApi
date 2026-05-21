@@ -1,7 +1,6 @@
 import { AccountType, UserRole } from "@prisma/client";
 import { firebaseAdmin } from "../config/firebase-admin";
 import { prisma } from "../config/prisma";
-import { generateToken } from "../utils/jwt";
 
 function mapFirebaseProvider(provider?: string): AccountType {
   if (provider === "google.com") return "GOOGLE";
@@ -86,8 +85,6 @@ export const authService = {
       });
     }
 
-    // 3. Backend JWT (userId) for auth middleware
-    const token = generateToken(String(user.id));
-    return { user, token };
+    return { user };
   },
 };

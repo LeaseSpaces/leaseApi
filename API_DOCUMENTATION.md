@@ -14,7 +14,9 @@ This Node.js/Express backend serves the LeaseSpaces property rental platform. It
 | Production (recommended) | `https://api3-jfh4l76lzq-bq.a.run.app/api` |
 | Production (legacy `api`) | `https://api-jfh4l76lzq-bq.a.run.app/api` |
 
-See **API_ENDPOINTS_GUIDE.md** for the full endpoint list and **Latest endpoints** below for deployment details.
+See **API_ENDPOINTS_GUIDE.md** for the full endpoint list (with **🆕** markers on new routes) and **Latest endpoints** below for deployment details.
+
+> **Legend:** Rows or sections marked **🆕** were added or significantly extended in the **May 2026** release.
 
 JSON APIs are under **`/api/...`**. See **Latest endpoints** for Firebase path quirks and avoiding double `/api` in clients.
 
@@ -84,7 +86,7 @@ All errors return JSON in this shape:
 | POST | `/api/auth/otp/verify` | None | Body: `{ email, otp }`. Verifies OTP, issues backend JWT, returns `onboardingRequired`. |
 | POST | `/api/auth/onboarding` | Bearer (backend JWT) | Body: `{ name, surname, role: "tenant"\|"landlord" }`. Completes first-time profile setup after OTP login. |
 | POST | `/api/auth/refresh` | Bearer (backend JWT) | Returns new token. |
-| POST | `/api/auth/2fa/verify-login` | None | Body: `{ temporaryToken, otp }`. Admin 2FA flow. |
+| POST | `/api/auth/2fa/verify-login` | None | Body: `{ temporaryToken, otp }`. Step 2 after login when `requires2fa: true` (admin, tenant, landlord). |
 
 **Registration types**: `GOOGLE`, `FACEBOOK`, `APPLE`, `EMAIL`. Infer from Firebase if omitted.
 
@@ -114,36 +116,36 @@ All errors return JSON in this shape:
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/properties` | None | List properties (**approved + available** only for public browse) |
-| GET | `/api/properties/:propertyId/lease` | `appAuth` | Active lease for tenant/landlord when occupied |
+| 🆕 GET | `/api/properties/:propertyId/lease` | `appAuth` | Active lease for tenant/landlord when occupied |
 | GET | `/api/properties/:propertyId` | None | Get single property |
 | POST | `/api/properties/search` | None | Body: `{ query?, filters?, sortBy?, sortOrder? }`. Search properties |
 | POST | `/api/properties` | Backend JWT or Firebase ID token (`appAuth`) | Create property |
 | PUT | `/api/properties/:propertyId` | Backend JWT or Firebase ID token (`appAuth`) | Update property |
 | DELETE | `/api/properties/:propertyId` | Backend JWT or Firebase ID token (`appAuth`) | Delete property |
-| GET | `/api/properties/:propertyId/chats` | Backend JWT or Firebase ID token (`appAuth`) | **Tenant:** get existing chat with landlord for this listing |
-| POST | `/api/properties/:propertyId/chats` | Backend JWT or Firebase ID token (`appAuth`) | **Tenant:** start or resume chat (“Message landlord”) |
+| 🆕 GET | `/api/properties/:propertyId/chats` | Backend JWT or Firebase ID token (`appAuth`) | **Tenant:** get existing chat with landlord for this listing |
+| 🆕 POST | `/api/properties/:propertyId/chats` | Backend JWT or Firebase ID token (`appAuth`) | **Tenant:** start or resume chat (“Message landlord”) |
 
 **Query params (GET /properties)**:
 - `page`, `limit`, `location`, `minPrice`, `maxPrice`, `propertyType`, `bedrooms`, `bathrooms`, `rentalType`, `amenities`, `sortBy`, `sortOrder`
 
 ---
 
-### Applications (`/api/applications`)
+### Applications (`/api/applications`) — 🆕
 
 Multi-step **apply for rental** flow (draft → documents → submit → pending).
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/properties/:propertyId/apply-form` | `appAuth` | Form schema + `existingDraft` |
-| POST | `/api/applications` | `appAuth` | Create **draft** (step 1 personal info) |
-| PATCH | `/api/applications/:applicationId` | `appAuth` | Update draft personal info |
-| POST | `/api/applications/:applicationId/documents` | `appAuth` | Step 2: multipart (`governmentId`, `proofOfIncome`, `referenceLetters`) or JSON base64 |
-| GET | `/api/applications/:applicationId` | `appAuth` | Review summary (step 3) |
-| POST | `/api/applications/:applicationId/submit` | `appAuth` | Submit: `{ "termsAccepted": true }` → `pending` + chat |
-| GET | `/api/applications` | `appAuth` | Tenant: my applications (excludes drafts) |
-| GET | `/api/applications/incoming` | Landlord/admin | Incoming applications |
-| GET | `/api/applications/incoming/:applicationId` | Landlord/admin | Detail + `documentsVerification` |
-| PATCH | `/api/applications/incoming/:applicationId/decision` | Landlord/admin | `{ "decision": "approved" \| "rejected" }` — approve creates **lease** |
+| 🆕 GET | `/api/properties/:propertyId/apply-form` | `appAuth` | Form schema + `existingDraft` |
+| 🆕 POST | `/api/applications` | `appAuth` | Create **draft** (step 1 personal info) |
+| 🆕 PATCH | `/api/applications/:applicationId` | `appAuth` | Update draft personal info |
+| 🆕 POST | `/api/applications/:applicationId/documents` | `appAuth` | Step 2: multipart (`governmentId`, `proofOfIncome`, `referenceLetters`) or JSON base64 |
+| 🆕 GET | `/api/applications/:applicationId` | `appAuth` | Review summary (step 3) |
+| 🆕 POST | `/api/applications/:applicationId/submit` | `appAuth` | Submit: `{ "termsAccepted": true }` → `pending` + chat |
+| 🆕 GET | `/api/applications` | `appAuth` | Tenant: my applications (excludes drafts) |
+| 🆕 GET | `/api/applications/incoming` | Landlord/admin | Incoming applications |
+| 🆕 GET | `/api/applications/incoming/:applicationId` | Landlord/admin | Detail + `documentsVerification` |
+| 🆕 PATCH | `/api/applications/incoming/:applicationId/decision` | Landlord/admin | `{ "decision": "approved" \| "rejected" }` — approve creates **lease** |
 | PUT | `/api/applications/:applicationId/status` | `appAuth` | Legacy approve/reject alias |
 
 **Document upload:** Use `multipart/form-data`; field names must be camelCase. Do not set `Content-Type` manually. Max 10MB per file. On Firebase/Cloud Run, uploads use `req.rawBody` (Busboy) — not Multer.
@@ -165,7 +167,7 @@ Vendor/admin update: `PATCH /api/admin/applications/:id/documents-verification` 
 
 ---
 
-### Chat (`/api/chats`)
+### Chat (`/api/chats`) — 🆕
 
 Tenant ↔ landlord messaging. **Messages and conversations are stored in Firebase Firestore** (realtime). Postgres is used for user/property validation and profile hydration in API responses.
 
@@ -177,14 +179,14 @@ Tenant ↔ landlord messaging. **Messages and conversations are stored in Fireba
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/chats` | Inbox — list conversations for current user. Query: `page`, `limit` (max 50). |
-| POST | `/api/chats` | Create or get conversation. Body: see below. |
-| GET | `/api/chats/:conversationId` | Get one conversation (with last message preview). |
-| GET | `/api/chats/:conversationId/history` | **Chat history** with timestamps. Same as `/messages`. |
-| GET | `/api/chats/:conversationId/messages` | Chat history (alias). |
-| POST | `/api/chats/:conversationId/messages` | Send message. Body: `{ "body": "...", "attachments?": null }`. |
-| POST | `/api/chats/:conversationId/read` | Mark messages from the other party as read. |
-| GET | `/api/chats/:conversationId/stream` | SSE stream (optional; clients may use Firestore listeners instead). |
+| 🆕 GET | `/api/chats` | Inbox — list conversations for current user. Query: `page`, `limit` (max 50). |
+| 🆕 POST | `/api/chats` | Create or get conversation. Body: see below. |
+| 🆕 GET | `/api/chats/:conversationId` | Get one conversation (with last message preview). |
+| 🆕 GET | `/api/chats/:conversationId/history` | **Chat history** with timestamps. Same as `/messages`. |
+| 🆕 GET | `/api/chats/:conversationId/messages` | Chat history (alias). |
+| 🆕 POST | `/api/chats/:conversationId/messages` | Send message. Body: `{ "body": "...", "attachments?": null }`. |
+| 🆕 POST | `/api/chats/:conversationId/read` | Mark messages from the other party as read. |
+| 🆕 GET | `/api/chats/:conversationId/stream` | SSE stream (optional; clients may use Firestore listeners instead). |
 
 **Mobile parity:** Same routes under `/api/mobile/chats`. Tenant property shortcuts under `/api/mobile/properties/:propertyId/chats`.
 
@@ -294,10 +296,10 @@ Direct client writes to Firestore are blocked by default (`firestore.rules`); us
 | POST | `/api/admin/users/:userId/2fa/disable` | **Super admin** | Disable 2FA for a user (clears secret). |
 | GET | `/api/admin/locations` | Admin + `appAuth` | List locations from **Firestore** (optional `?userId=`). |
 | PUT | `/api/admin/locations/:locationId` | Admin + `appAuth` | Update a location document. |
-| GET | `/api/admin/applications` | Admin + `appAuth` | List applications (see rental applications in guide). |
-| GET | `/api/admin/applications/:applicationId` | Admin + `appAuth` | Application detail incl. `documentsVerification`. |
-| PATCH | `/api/admin/applications/:applicationId/decision` | Admin + `appAuth` | Approve/reject pending application. |
-| PATCH | `/api/admin/applications/:applicationId/documents-verification` | Admin + `appAuth` | Vendor workflow: update document verification status. |
+| 🆕 GET | `/api/admin/applications` | Admin + `appAuth` | List applications (see rental applications in guide). |
+| 🆕 GET | `/api/admin/applications/:applicationId` | Admin + `appAuth` | Application detail incl. `documentsVerification`. |
+| 🆕 PATCH | `/api/admin/applications/:applicationId/decision` | Admin + `appAuth` | Approve/reject pending application. |
+| 🆕 PATCH | `/api/admin/applications/:applicationId/documents-verification` | Admin + `appAuth` | Vendor workflow: update document verification status. |
 | GET | `/api/admin/properties` | Admin + backend JWT or Firebase ID token | **Admin properties list** (table view). Supports `q`, `type`, `location`, `minPrice`, `maxPrice`, `moderationStatus`, `availabilityStatus`, `page`, `limit`, `sortBy`, `sortOrder`. Returns UI-shaped rows + pagination. |
 | GET | `/api/admin/properties/:propertyId` | Admin + backend JWT or Firebase ID token | **Admin property detail** (modal view). Returns UI-shaped property row. |
 | PATCH | `/api/admin/properties/:propertyId/moderation` | Admin + backend JWT or Firebase ID token | **Moderate property**. Body: `{ action: "approve"|"decline"|"flag_for_review"|"set_pending", notes? }`. Notes required when flagging. |
@@ -325,45 +327,96 @@ All admin routes listed above use **`appAuth`** — they accept the **backend JW
 
 ---
 
-### Landlord (`/api/landlord`)
+### Landlord (`/api/landlord`) — 🆕
 
 Requires `appRole: landlord` or `admin`. Same `appAuth` token as the main app.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET/POST | `/api/landlord/properties` | List / create my listings |
-| PUT/DELETE | `/api/landlord/properties/:propertyId` | Update / delete (ownership enforced) |
-| GET | `/api/landlord/applications` | Incoming applications |
-| GET | `/api/landlord/applications/:applicationId` | Detail + documents + `documentsVerification` |
-| PATCH | `/api/landlord/applications/:applicationId/decision` | Approve / reject |
-| GET | `/api/landlord/leases` | My leases |
-| GET/PATCH | `/api/landlord/maintenance` | Maintenance queue / update status |
+| 🆕 GET/POST | `/api/landlord/properties` | List / create my listings |
+| 🆕 PUT/DELETE | `/api/landlord/properties/:propertyId` | Update / delete (ownership enforced) |
+| 🆕 GET | `/api/landlord/applications` | Incoming applications |
+| 🆕 GET | `/api/landlord/applications/:applicationId` | Detail + documents + `documentsVerification` |
+| 🆕 PATCH | `/api/landlord/applications/:applicationId/decision` | Approve / reject |
+| 🆕 GET | `/api/landlord/leases` | My leases |
+| 🆕 GET/PATCH | `/api/landlord/maintenance` | Maintenance queue / update status |
 
 Alias: `/api/applications/incoming/*` — same as landlord application routes.
 
 ---
 
-### Leases (`/api/leases`)
+### Leases (`/api/leases`) — 🆕
 
 Created automatically when an application is **approved**. Property `availabilityStatus` becomes `occupied`.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/leases/me` | Tenant or landlord | List my leases |
-| GET | `/api/leases/:leaseId` | Tenant or landlord | Lease detail (`agreementUrl`, rent, dates) |
-| GET | `/api/properties/:propertyId/lease` | Tenant or landlord | Active lease for occupied property |
+| 🆕 GET | `/api/leases/me` | Tenant or landlord | List my leases |
+| 🆕 GET | `/api/leases/:leaseId` | Tenant or landlord | Lease detail (`agreementUrl`, rent, dates) |
+| 🆕 GET | `/api/properties/:propertyId/lease` | Tenant or landlord | Active lease for occupied property |
 
 ---
 
-### Maintenance (`/api/maintenance`)
+### Maintenance (`/api/maintenance`) — 🆕
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/api/maintenance` | Tenant | Report issue (requires active lease on `propertyId`) |
-| GET | `/api/maintenance` | Tenant | My requests |
-| GET | `/api/maintenance/:requestId` | Tenant | One request |
-| GET | `/api/landlord/maintenance` | Landlord | Requests for my properties |
-| PATCH | `/api/landlord/maintenance/:requestId` | Landlord | Body: `{ "status": "open" \| "in_progress" \| "resolved" \| "closed" }` |
+| 🆕 POST | `/api/maintenance` | Tenant | Report issue (requires active lease on `propertyId`) |
+| 🆕 GET | `/api/maintenance` | Tenant | My requests |
+| 🆕 GET | `/api/maintenance/:requestId` | Tenant | One request |
+| 🆕 GET | `/api/landlord/maintenance` | Landlord | Requests for my properties |
+| 🆕 PATCH | `/api/landlord/maintenance/:requestId` | Landlord | Body: `{ "status": "open" \| "in_progress" \| "resolved" \| "closed" }` |
+
+---
+
+### Profile & account (`/api/profile`) — 🆕
+
+Tenant and landlord profile settings. Auth: `appAuth`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| 🆕 GET | `/api/profile` | Profile + settings flags |
+| 🆕 PATCH | `/api/profile` | Update name, surname, email, phone/cellphone |
+| 🆕 POST | `/api/profile/avatar` | Multipart profile image (`avatar` or `image`), max **2MB**, JPEG/PNG/WebP |
+| 🆕 POST | `/api/profile/2fa/init` | QR + secret for authenticator app |
+| 🆕 POST | `/api/profile/2fa/enable` | Body: `{ secret, otp }` |
+| 🆕 POST | `/api/profile/2fa/disable` | Body: `{ otp }` |
+| 🆕 DELETE | `/api/profile` | Delete account; body: `confirmEmail`, `otp?`, `password?` |
+
+Mobile: `/api/mobile/profile/*`. Admins: use `/api/admin/admin-profile` and `/api/admin/delete-admin`.
+
+---
+
+### Favourites (`/api/favorites`) — 🆕
+
+Tenant saved listings (heart icon). Auth: `appAuth` (backend JWT or Firebase ID token).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| 🆕 POST | `/api/favorites/toggle` | Toggle favourite. Body: `{ propertyId }` |
+| 🆕 POST | `/api/favorites` | Add favourite (idempotent) |
+| 🆕 DELETE | `/api/favorites/:propertyId` | Remove favourite |
+| 🆕 GET | `/api/favorites` | List saved properties. Query: `page`, `limit` |
+| 🆕 GET | `/api/favorites/check` | Query: `propertyIds=id1,id2` |
+| 🆕 GET | `/api/favorites/:propertyId/status` | `{ favorited, favoriteId, favoritedAt }` |
+
+Mobile: `/api/mobile/favorites/*`
+
+---
+
+### Public support (`/api/support`) — 🆕
+
+No auth. Used by the app “Create support ticket” flow. Confirmation email goes to the submitter only.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| 🆕 GET | `/api/support/form` | None | Form categories + `defaultPriority` |
+| 🆕 GET | `/api/support/categories` | None | Same as `/form` |
+| 🆕 POST | `/api/support/tickets` | None | Submit ticket. Body: `category`, `description`, `customerEmail`, `confirmEmail`, `customerName?` |
+
+**POST response `201`:** `{ success, ticket: { id, ticketNumber, category, status, createdAt }, emailSent, confirmationEmailSentTo, message }`
+
+Mobile alias: `/api/mobile/support/*` (same handlers).
 
 ---
 
@@ -642,7 +695,27 @@ const settings = await fetch(`${API}/admin/settings/app`, {
 
 ## Latest endpoints
 
-Reference for recently added or extended areas: deployment URLs, mobile auth, super admin, admin properties (moderation / list shape), mobile parity routes, and tickets.
+Reference for **🆕 May 2026** additions and other recently extended areas.
+
+### New API surface (May 2026)
+
+| Module | Base path | Highlights |
+|--------|-----------|------------|
+| **Applications** | `/api/applications` | Multi-step draft → documents → submit; landlord `incoming`; auto chat on submit |
+| **Chat** | `/api/chats`, `/api/properties/:id/chats` | Firestore-backed tenant ↔ landlord messaging |
+| **Landlord** | `/api/landlord` | Properties, applications, leases, maintenance |
+| **Leases** | `/api/leases` | Created on approve; `GET .../properties/:id/lease` |
+| **Maintenance** | `/api/maintenance` | Tenant reports; landlord status updates |
+| **Public support** | `/api/support` | Anonymous ticket + confirmation email |
+| **Favourites** | `/api/favorites` | Toggle/list/check saved properties |
+| **Profile** | `/api/profile` | Update profile, 2FA, delete account (tenant & landlord) |
+| **Admin applications** | `/api/admin/applications` | List, detail, decision, `documents-verification` |
+
+See **API_ENDPOINTS_GUIDE.md** → **What's new (May 2026)** for the full path list with **🆕** markers.
+
+### Deployment, auth, and admin (existing docs below)
+
+Reference for deployment URLs, mobile auth, super admin, admin properties (moderation / list shape), mobile parity routes, and tickets.
 
 ### Deployment & base URLs (Firebase / local)
 

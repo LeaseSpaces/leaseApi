@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { authService } from "../services/socialAuth";
+import { buildPostLoginResponse } from "../services/authLoginService";
 
 const authController = {
   /** GET /api/auth — health check; confirms auth API is up */
@@ -8,8 +9,9 @@ const authController = {
       success: true,
       message: "Auth API (LeaseSpaces)",
       endpoints: {
-        "POST /api/auth/firebase": "Body: { idToken, registrationType }. Returns { success, user, token }",
-        "POST /api/auth/sync": "Header: Authorization: Bearer <firebase_id_token>. Returns { success, user, token }",
+        "POST /api/auth/firebase": "Body: { idToken, registrationType }. Returns { success, user, token } or requires2fa + temporaryToken",
+        "POST /api/auth/sync": "Header: Authorization: Bearer <firebase_id_token>. Returns { success, user, token } or requires2fa + temporaryToken",
+        "POST /api/auth/2fa/verify-login": "Body: { temporaryToken, otp }. Completes login when 2FA is enabled",
       },
     });
   },
@@ -26,22 +28,8 @@ const authController = {
         });
         return;
       }
-      const { user, token } = await authService.handleFirebaseAuth(idToken, registrationType, appRole);
-      res.status(200).json({
-        success: true,
-        user: {
-          id: user.id,
-          uid: user.socialUserId,
-          email: user.email,
-          name: user.name,
-          surname: user.surname,
-          role: user.appRole ?? "tenant",
-          twofa_enabled: user.twofa_enabled,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        },
-        token,
-      });
+      const { user } = await authService.handleFirebaseAuth(idToken, registrationType, appRole);
+      res.status(200).json(buildPostLoginResponse(user));
     } catch (err: unknown) {
       res.status(401).json({
         success: false,

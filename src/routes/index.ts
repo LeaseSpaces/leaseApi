@@ -12,6 +12,8 @@ import { supportRouter } from "./supportRoutes";
 import { landlordRouter } from "./landlordRoutes";
 import { leaseRouter } from "./leaseRoutes";
 import { maintenanceRouter } from "./maintenanceRoutes";
+import { favoriteRouter } from "./favoriteRoutes";
+import { profileRouter } from "./profileRoutes";
 
 const Router = express.Router();
 
@@ -31,5 +33,9 @@ Router.use("/mobile/support", supportRouter);
 Router.use("/landlord", landlordRouter);
 Router.use("/leases", leaseRouter);
 Router.use("/maintenance", maintenanceRouter);
+Router.use("/favorites", favoriteRouter);
+Router.use("/mobile/favorites", favoriteRouter);
+Router.use("/profile", profileRouter);
+Router.use("/mobile/profile", profileRouter);
 
 export default Router;
